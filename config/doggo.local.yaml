@@ -1,0 +1,254 @@
+robot:
+  name: Doggo
+
+servo_bus:
+  enabled: true
+  device: COM4
+  baud_rate: 1000000
+  timeout_seconds: 0.05
+  scan_start_id: 1
+  scan_end_id: 12
+
+web:
+  host: 0.0.0.0
+  port: 8080
+
+esp32:
+  enabled: true
+  listen_host: 0.0.0.0
+  listen_port: 8765
+  command_timeout_ms: 250
+
+motion:
+  loop_hz: 40
+  default_speed: 1200
+  default_acceleration: 30
+  stand_speed: 700
+  stand_acceleration: 10
+  sit_speed: 320
+  sit_acceleration: 5
+
+vision:
+  enabled: false
+  track_target: person
+  camera_indexes: [0, 1]
+
+legs:
+  front_left:
+    hip_x:
+      id: 10
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    knee_y:
+      id: 11
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    foot:
+      id: 12
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 781
+      max_ticks: 3072
+  front_right:
+    hip_x:
+      id: 7
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    knee_y:
+      id: 8
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3199
+    foot:
+      id: 9
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 142
+      max_ticks: 3072
+  rear_left:
+    hip_x:
+      id: 1
+      direction: 1
+      neutral_ticks: 2963
+      min_ticks: 1628
+      max_ticks: 3106
+    knee_y:
+      id: 2
+      direction: 1
+      neutral_ticks: 2734
+      min_ticks: 36
+      max_ticks: 2790
+    foot:
+      id: 3
+      direction: 1
+      neutral_ticks: 3171
+      min_ticks: 1222
+      max_ticks: 3171
+  rear_right:
+    hip_x:
+      id: 4
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 897
+      max_ticks: 2530
+    knee_y:
+      id: 5
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 908
+      max_ticks: 3805
+    foot:
+      id: 6
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3282
+
+stand_pose:
+  front_left:
+    hip_x: 2022
+    knee_y: 2652
+    foot: 781
+  front_right:
+    hip_x: 2050
+    knee_y: 1962
+    foot: 2360
+  rear_left:
+    hip_x: 2180
+    knee_y: 1467
+    foot: 2123
+  rear_right:
+    hip_x: 1837
+    knee_y: 2203
+    foot: 2408
+
+storage_pose:
+  front_left:
+    hip_x: 2112
+    knee_y: 1549
+    foot: 2732
+  front_right:
+    hip_x: 1983
+    knee_y: 3199
+    foot: 294
+  rear_left:
+    hip_x: 2102
+    knee_y: 2642
+    foot: 1506
+  rear_right:
+    hip_x: 1923
+    knee_y: 1164
+    foot: 2793
+
+sit_pose:
+  front_left:
+    hip_x: 2099
+    knee_y: 2146
+    foot: 1380
+  front_right:
+    hip_x: 1984
+    knee_y: 2420
+    foot: 1705
+  rear_left:
+    hip_x: 2100
+    knee_y: 2423
+    foot: 1347
+  rear_right:
+    hip_x: 1924
+    knee_y: 1351
+    foot: 3041
+
+stand_to_sit_mid_pose:
+  front_left:
+    hip_x: 2098
+    knee_y: 2157
+    foot: 1383
+  front_right:
+    hip_x: 1986
+    knee_y: 2414
+    foot: 1704
+  rear_left:
+    hip_x: 2107
+    knee_y: 2420
+    foot: 1353
+  rear_right:
+    hip_x: 1923
+    knee_y: 1354
+    foot: 3036
+
+sit_to_stand_mid_pose:
+  front_left:
+    hip_x: 2098
+    knee_y: 2944
+    foot: 1383
+  front_right:
+    hip_x: 1986
+    knee_y: 1675
+    foot: 1702
+  rear_left:
+    hip_x: 2112
+    knee_y: 2790
+    foot: 1222
+  rear_right:
+    hip_x: 1957
+    knee_y: 908
+    foot: 3282
+
+sit_to_stand_mid_test_2_pose:
+  front_left:
+    hip_x: 2096
+    knee_y: 2150
+    foot: 1383
+  front_right:
+    hip_x: 1987
+    knee_y: 2245
+    foot: 1701
+  rear_left:
+    hip_x: 2857
+    knee_y: 1656
+    foot: 1345
+  rear_right:
+    hip_x: 1047
+    knee_y: 1993
+    foot: 3043
+
+max_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 1628
+    knee_y: 36
+    foot: 1374
+  rear_right:
+    hip_x: 2530
+    knee_y: 3805
+    foot: 3041
+
+sit_to_stand_mid_pause_ms: 500
+
+stand_sequence:
+  - servo_id: 2
+    wait_after_ms: 1000
+  - servo_id: 3
+    wait_after_ms: 1000
+  - servo_id: 1
+    wait_after_ms: 0
+  - servo_id: 4
+    wait_after_ms: 200
+  - servo_id: 6
+    wait_after_ms: 200
+  - servo_id: 5
+    wait_after_ms: 0

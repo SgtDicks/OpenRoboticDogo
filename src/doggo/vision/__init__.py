@@ -1,0 +1,1 @@
+"""Vision scaffolding for Doggo."""

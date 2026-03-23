@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doggo Control</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Doggo Control</p>
+        <h1>Pi-first control surface for browser, Steam Deck, and joystick bring-up.</h1>
+        <p class="lede">
+          Use the buttons for servo bring-up first. WASD, arrow keys, and browser
+          gamepad input are wired in so the same page can become the future teleop surface.
+        </p>
+      </section>
+
+      <section class="panel panel-grid">
+        <div>
+          <h2>Connection</h2>
+          <p id="connection-state" class="status offline">Disconnected</p>
+          <button id="connect-ws" type="button">Connect WebSocket</button>
+        </div>
+        <div>
+          <h2>Bring-up</h2>
+          <div class="button-row">
+            <button id="scan-servos" type="button">Scan Servos</button>
+            <button id="stand-pose" type="button">Stand</button>
+            <button id="relax-pose" type="button">Relax</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Manual Teleop</h2>
+        <p>
+          Keyboard: <strong>WASD</strong> or arrows for movement, <strong>Q / E</strong> for turn.
+          Steam Deck browser gamepad uses the left stick for forward/strafe and right stick X for turn.
+        </p>
+        <div class="telemetry">
+          <div><span>Forward</span><strong id="axis-forward">0.00</strong></div>
+          <div><span>Strafe</span><strong id="axis-strafe">0.00</strong></div>
+          <div><span>Turn</span><strong id="axis-turn">0.00</strong></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Status</h2>
+        <pre id="status-view">Waiting for server...</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Event Log</h2>
+        <pre id="event-log">UI ready.</pre>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

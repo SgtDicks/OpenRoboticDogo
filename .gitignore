@@ -1,12 +1,9 @@
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
+*.pyo
 *.so
 
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -24,15 +21,11 @@ wheels/
 .installed.cfg
 *.egg
 
-# PyInstaller
 *.manifest
 *.spec
-
-# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -45,11 +38,10 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Jupyter Notebook
 .ipynb_checkpoints
 
-# Environments
 .env
+.venv/
 .venv
 env/
 venv/
@@ -57,7 +49,6 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDEs and editors
 .idea/
 .vscode/
 *.swp
@@ -65,8 +56,10 @@ venv.bak/
 *~
 .DS_Store
 
-# Project specific
 *.log
 data/
 logs/
-config.local.py 
+config.local.py
+.codex_tmp/
+*.state.json
+*_state.json

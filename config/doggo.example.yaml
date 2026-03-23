@@ -1,0 +1,240 @@
+robot:
+  name: Doggo
+
+servo_bus:
+  enabled: true
+  device: /dev/ttyUSB0
+  baud_rate: 1000000
+  timeout_seconds: 0.05
+  scan_start_id: 1
+  scan_end_id: 12
+
+web:
+  host: 0.0.0.0
+  port: 8080
+
+esp32:
+  enabled: true
+  listen_host: 0.0.0.0
+  listen_port: 8765
+  command_timeout_ms: 250
+
+motion:
+  loop_hz: 40
+  default_speed: 1200
+  default_acceleration: 30
+  stand_speed: 700
+  stand_acceleration: 10
+  sit_speed: 500
+  sit_acceleration: 8
+
+vision:
+  enabled: false
+  track_target: person
+  camera_indexes: [0, 1]
+
+legs:
+  front_left:
+    hip_x:
+      id: 1
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    knee_y:
+      id: 2
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    foot:
+      id: 3
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+  front_right:
+    hip_x:
+      id: 4
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    knee_y:
+      id: 5
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    foot:
+      id: 6
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+  rear_left:
+    hip_x:
+      id: 7
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    knee_y:
+      id: 8
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    foot:
+      id: 9
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+  rear_right:
+    hip_x:
+      id: 10
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    knee_y:
+      id: 11
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+    foot:
+      id: 12
+      direction: 1
+      neutral_ticks: 2048
+      min_ticks: 1024
+      max_ticks: 3072
+
+stand_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
+storage_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
+sit_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
+stand_to_sit_mid_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
+sit_to_stand_mid_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
+sit_to_stand_mid_test_2_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
+max_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
+sit_to_stand_mid_pause_ms: 500
