@@ -2,52 +2,98 @@
 
 # OpenRoboticDogo
 
-OpenRoboticDogo is an affordable open-source quadruped robot project built around 3D-printable hardware and a Raspberry Pi control stack. This repo now contains both the original mechanical design assets and a fresh software stack for Doggo.
+OpenRoboticDogo is our Doggo build: a low-cost open quadruped robot with printable parts, STS3215 servos, a Raspberry Pi control stack, browser teleop, and room for ESP32 joystick control plus future vision tracking.
 
-## Hardware in this repo
+![Doggo Build Photo](Pics%20and%20videos/PXL_20260322_135309000.RAW-01.jpg)
+
+## Massive Credit to the Original Repo
+
+This project owes a huge amount to the original open-source work at [garciamathias/OpenRoboticDog](https://github.com/garciamathias/OpenRoboticDog).
+
+The original repo set the mechanical direction, the spirit of the project, and the starting point that made this Doggo build practical in the first place. This repository is our Pi-first control and build branch around that work, not an attempt to erase where it came from. If you are here because of this repo, please go look at the original project, star it, and give the original author the credit they deserve.
+
+## Current Project Status
+
+- Raspberry Pi 4B is the main brain.
+- Waveshare Bus Servo Adapter is used for the STS3215 servo bus.
+- Browser control is live for desktop and Steam Deck use.
+- ESP32 joystick support is scaffolded as a low-latency manual input path.
+- Servo discovery, calibration, stand, sit, storage, relax, and live web bring-up are working.
+- A first walking pass exists, but it is still being tuned and is not moving correctly yet.
+
+## Hardware and Print Files
+
+This repo now contains both the printable robot files and the active control software:
 
 - `3D Files/` for printable parts
 - `Fusion360/` for editable CAD
-- `max_v1/` for earlier design assets
+- `Pics and videos/` for build media
+- `src/`, `config/`, `firmware/`, and `docs/` for the new Doggo control stack
+
+### New print files
+
+- `3D Files/Shoe.stl`
+  Print this in TPU as a slip-on shoe for the robot feet to improve grip.
+- `3D Files/expanded top.stl`
+  Updated top/body part added to the printable parts set.
+
+## Media
+
+The build media folder is now part of the repo:
+
+- `Pics and videos/PXL_20260322_135309000.RAW-01.jpg`
+
+Future videos and progress photos should also go in `Pics and videos/` so the README and project history stay together.
 
 ## Doggo Control Stack
 
-The software here is a new build shaped around the confirmed hardware:
+The software here is a fresh control build shaped around the confirmed hardware:
 
-- Raspberry Pi 4B as the main brain
-- Waveshare Bus Servo Adapter for 12x STS3215 servos
-- ESP32 joystick controller as a low-latency manual input and fallback path
-- Browser control for desktop and Steam Deck
-- Future person-following with USB cameras
+- Raspberry Pi 4B as the main controller
+- 12x STS3215 servos
+- Waveshare bus adapter
+- browser teleop for laptop, phone, and Steam Deck
+- future person-following with cameras
 
-## What is here already
+### What is already working
 
-- Pi-side Python service for servo access, safety states, and the web API
-- Real STS3215 serial packet layer for the Waveshare adapter
-- Servo scan, ID assignment, individual servo jog, stand, storage, sit, and relax flows
-- Browser UI for desktop and Steam Deck use
-- ESP32 firmware scaffold that sends joystick commands to the Pi over UDP
-- Docs for safe bring-up, architecture, and milestone order
+- STS3215 serial packet layer and Waveshare adapter access
+- servo scanning, ID assignment, single-servo moves, and readback
+- saved stand, sit, storage, and calibration poses
+- web dashboard with pose controls, live health, touch sliders, and servo monitor
+- first-pass crawl gait wiring for browser and future ESP32 teleop
 
-Walking is intentionally scaffolded rather than faked. Real calibration and measured leg geometry come first so the eventual gait code is worth trusting.
+### What still needs tuning
 
-## Current assumptions
+- walking gait signs and stride tuning
+- smoother walk transitions
+- measured IK and geometry-based motion
+- camera tracking and follow behavior
 
-- Web and Steam Deck share the same browser-based control surface
-- ESP32 joystick input is sent to the Pi over Wi-Fi UDP
-- The live servo mapping, poses, and calibration data are stored in `config/doggo.local.yaml`
+## Requirements
 
-## Quick start
+Install the repo dependencies with:
 
 ```powershell
-cd "H:\3D Prints\Robot Dogo\Dogo Code"
+pip install -r requirements.txt
+```
+
+For editable development from this repo:
+
+```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e .
+```
+
+## Quick Start
+
+```powershell
+cd "H:\3D Prints\Robot Dogo\Dogo Code"
 Copy-Item config\doggo.example.yaml config\doggo.local.yaml
 ```
 
-Update `config\doggo.local.yaml` for your Pi serial device, current servo layout, and network details.
+Update `config\doggo.local.yaml` for your serial device, current servo mapping, and walking tuning.
 
 ### Scan the servo bus
 
@@ -55,7 +101,7 @@ Update `config\doggo.local.yaml` for your Pi serial device, current servo layout
 doggo --config config\doggo.local.yaml scan
 ```
 
-### Start the Pi service
+### Start the web interface
 
 ```powershell
 doggo --config config\doggo.local.yaml serve
@@ -63,31 +109,31 @@ doggo --config config\doggo.local.yaml serve
 
 Then open `http://<pi-ip>:8080`.
 
-## Main commands
+## Main Commands
 
 ```powershell
 doggo --config config\doggo.local.yaml scan
+doggo --config config\doggo.local.yaml read-all
 doggo --config config\doggo.local.yaml read-pos --id 1
-doggo --config config\doggo.local.yaml assign-id --current-id 1 --new-id 4
 doggo --config config\doggo.local.yaml move --id 1 --position 2048
+doggo --config config\doggo.local.yaml assign-id --current-id 1 --new-id 4
 doggo --config config\doggo.local.yaml stand
-doggo --config config\doggo.local.yaml storage
 doggo --config config\doggo.local.yaml sit
+doggo --config config\doggo.local.yaml storage
 doggo --config config\doggo.local.yaml relax
 doggo --config config\doggo.local.yaml serve
 ```
 
-## Safety notes
+## Safety Notes
 
-- Verify the STS3215 servo supply voltage against the servo datasheet before powering the bus. Do not assume the Pi or controller input voltage is the servo voltage.
-- Bring the system up with one servo connected first, not all 12.
-- Assign IDs before mounting all servos into the dog.
-- Keep `stand_pose` conservative until the first neutral calibration is complete.
+- Verify the STS3215 servo rail voltage against the servo datasheet before powering the bus.
+- Start with one servo on the bus when bringing up new hardware.
+- Tune walking with very small amplitudes first.
+- Keep a quick path to `relax` while testing motion.
 
-## Next milestones
+## Near-Term Roadmap
 
-1. Finish measured calibration for every leg and joint.
-2. Add safer motion-state transitions and calibration UI tools.
-3. Add measured leg geometry and inverse kinematics.
-4. Add walking gait and teleop polish.
-5. Add person-follow mode using onboard cameras.
+1. Finish tuning the first walking pass until the gait moves correctly.
+2. Add safer live gait tuning controls in the browser.
+3. Add measured geometry and IK.
+4. Add camera-assisted person following.

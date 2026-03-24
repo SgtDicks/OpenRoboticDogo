@@ -60,6 +60,14 @@ def create_app(config_path: str | Path = "config/doggo.local.yaml") -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"servo_id": servo_id, "position": position}
 
+    @app.get("/api/servos/positions")
+    async def read_all_positions() -> dict:
+        try:
+            positions = await get_runtime().supervisor.read_all_positions()
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"positions": positions}
+
     @app.post("/api/servos/{servo_id}/move")
     async def move_servo(servo_id: int, request: ServoMoveRequest) -> dict:
         try:
@@ -85,6 +93,22 @@ def create_app(config_path: str | Path = "config/doggo.local.yaml") -> FastAPI:
     async def stand() -> dict:
         try:
             await get_runtime().supervisor.stand()
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return get_runtime().supervisor.status_snapshot()
+
+    @app.post("/api/pose/storage")
+    async def storage() -> dict:
+        try:
+            await get_runtime().supervisor.storage()
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return get_runtime().supervisor.status_snapshot()
+
+    @app.post("/api/pose/sit")
+    async def sit() -> dict:
+        try:
+            await get_runtime().supervisor.sit()
         except ServoBusError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return get_runtime().supervisor.status_snapshot()

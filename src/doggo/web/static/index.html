@@ -3,57 +3,236 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Doggo Control</title>
+    <title>Doggo Pilot Deck</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <main class="shell">
-      <section class="hero">
-        <p class="eyebrow">Doggo Control</p>
-        <h1>Pi-first control surface for browser, Steam Deck, and joystick bring-up.</h1>
-        <p class="lede">
-          Use the buttons for servo bring-up first. WASD, arrow keys, and browser
-          gamepad input are wired in so the same page can become the future teleop surface.
-        </p>
+      <section class="hero panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Doggo Pilot Deck</p>
+          <h1>Bring-up, pose control, and cautious crawl walking from one browser.</h1>
+          <p class="lede">
+            Stand first, then ease into teleop. This panel is built for desktop, touch, and
+            Steam Deck browser control while we tune Doggo's first walking pass.
+          </p>
+        </div>
+        <div class="hero-summary">
+          <article class="summary-card">
+            <span class="summary-label">Connection</span>
+            <p id="connection-state" class="status offline">Disconnected</p>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Robot</span>
+            <strong id="robot-name">Doggo</strong>
+            <span id="bus-device" class="summary-note">Waiting for config...</span>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">Controller State</span>
+            <strong id="robot-state">idle</strong>
+            <span id="gait-state" class="summary-note">Loading gait...</span>
+          </article>
+        </div>
       </section>
 
-      <section class="panel panel-grid">
-        <div>
-          <h2>Connection</h2>
-          <p id="connection-state" class="status offline">Disconnected</p>
-          <button id="connect-ws" type="button">Connect WebSocket</button>
-        </div>
-        <div>
-          <h2>Bring-up</h2>
-          <div class="button-row">
-            <button id="scan-servos" type="button">Scan Servos</button>
-            <button id="stand-pose" type="button">Stand</button>
-            <button id="relax-pose" type="button">Relax</button>
+      <section class="dashboard">
+        <section class="panel pilot-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Pilot</p>
+              <h2>Pose and Teleop</h2>
+            </div>
+            <button id="connect-ws" type="button" class="button ghost">Reconnect</button>
           </div>
-        </div>
-      </section>
 
-      <section class="panel">
-        <h2>Manual Teleop</h2>
-        <p>
-          Keyboard: <strong>WASD</strong> or arrows for movement, <strong>Q / E</strong> for turn.
-          Steam Deck browser gamepad uses the left stick for forward/strafe and right stick X for turn.
-        </p>
-        <div class="telemetry">
-          <div><span>Forward</span><strong id="axis-forward">0.00</strong></div>
-          <div><span>Strafe</span><strong id="axis-strafe">0.00</strong></div>
-          <div><span>Turn</span><strong id="axis-turn">0.00</strong></div>
-        </div>
-      </section>
+          <div class="action-groups">
+            <div class="action-block">
+              <h3>Quick Actions</h3>
+              <div class="button-grid">
+                <button id="refresh-health" type="button" class="button ghost">Refresh Health</button>
+                <button id="scan-servos" type="button" class="button ghost">Scan Bus</button>
+                <button id="read-positions" type="button" class="button ghost">Read Positions</button>
+              </div>
+            </div>
 
-      <section class="panel">
-        <h2>Status</h2>
-        <pre id="status-view">Waiting for server...</pre>
-      </section>
+            <div class="action-block">
+              <h3>Body Poses</h3>
+              <div class="button-grid">
+                <button id="pose-stand" type="button" class="button">Stand</button>
+                <button id="pose-sit" type="button" class="button">Sit</button>
+                <button id="pose-storage" type="button" class="button">Storage</button>
+                <button id="pose-relax" type="button" class="button danger">Relax</button>
+              </div>
+            </div>
+          </div>
 
-      <section class="panel">
-        <h2>Event Log</h2>
-        <pre id="event-log">UI ready.</pre>
+          <div class="axis-grid">
+            <article class="axis-card">
+              <span>Forward</span>
+              <strong id="axis-forward">0.00</strong>
+              <div class="axis-meter"><div id="axis-forward-bar" class="axis-fill"></div></div>
+            </article>
+            <article class="axis-card">
+              <span>Strafe</span>
+              <strong id="axis-strafe">0.00</strong>
+              <div class="axis-meter"><div id="axis-strafe-bar" class="axis-fill"></div></div>
+            </article>
+            <article class="axis-card">
+              <span>Turn</span>
+              <strong id="axis-turn">0.00</strong>
+              <div class="axis-meter"><div id="axis-turn-bar" class="axis-fill"></div></div>
+            </article>
+          </div>
+
+          <div class="touch-deck">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Touch Trim</p>
+                <h3>On-screen analog controls</h3>
+              </div>
+              <button id="center-axes" type="button" class="button ghost">Center Axes</button>
+            </div>
+
+            <div class="slider-stack">
+              <label class="slider-card" for="touch-forward">
+                <span>Forward / Back</span>
+                <strong id="touch-forward-value">0.00</strong>
+                <input id="touch-forward" type="range" min="-1" max="1" step="0.05" value="0" />
+              </label>
+              <label class="slider-card" for="touch-strafe">
+                <span>Strafe</span>
+                <strong id="touch-strafe-value">0.00</strong>
+                <input id="touch-strafe" type="range" min="-1" max="1" step="0.05" value="0" />
+              </label>
+              <label class="slider-card" for="touch-turn">
+                <span>Turn</span>
+                <strong id="touch-turn-value">0.00</strong>
+                <input id="touch-turn" type="range" min="-1" max="1" step="0.05" value="0" />
+              </label>
+            </div>
+
+            <div class="preset-grid">
+              <button type="button" class="button ghost preset" data-forward="0.35" data-strafe="0" data-turn="0">
+                Step Forward
+              </button>
+              <button type="button" class="button ghost preset" data-forward="-0.35" data-strafe="0" data-turn="0">
+                Step Back
+              </button>
+              <button type="button" class="button ghost preset" data-forward="0" data-strafe="-0.35" data-turn="0">
+                Shift Left
+              </button>
+              <button type="button" class="button ghost preset" data-forward="0" data-strafe="0.35" data-turn="0">
+                Shift Right
+              </button>
+              <button type="button" class="button ghost preset" data-forward="0" data-strafe="0" data-turn="-0.35">
+                Turn Left
+              </button>
+              <button type="button" class="button ghost preset" data-forward="0" data-strafe="0" data-turn="0.35">
+                Turn Right
+              </button>
+            </div>
+
+            <p class="control-help">
+              Keyboard: <strong>WASD</strong> or arrows for movement, <strong>Q / E</strong> for turn.
+              Gamepad: left stick for forward and strafe, right stick X for turn.
+            </p>
+          </div>
+        </section>
+
+        <section class="panel system-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">System</p>
+              <h2>Live Health</h2>
+            </div>
+          </div>
+
+          <div class="health-grid">
+            <article class="health-card">
+              <span>Supervisor</span>
+              <strong id="health-supervisor">idle</strong>
+            </article>
+            <article class="health-card">
+              <span>Servo Bus</span>
+              <strong id="health-servo">offline</strong>
+            </article>
+            <article class="health-card">
+              <span>Gait</span>
+              <strong id="health-gait">loading</strong>
+            </article>
+            <article class="health-card">
+              <span>Sources</span>
+              <strong id="health-sources">none</strong>
+            </article>
+          </div>
+
+          <div class="message-card">
+            <span>Last Message</span>
+            <p id="last-message">Waiting for server...</p>
+          </div>
+
+          <div class="config-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Walking Profile</p>
+                <h3>Current tuning snapshot</h3>
+              </div>
+            </div>
+            <div id="walking-profile" class="chip-grid">
+              <span class="chip">Loading config...</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel servo-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Servo Monitor</p>
+              <h2>Configured joints and live telemetry</h2>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="servo-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Leg</th>
+                  <th>Joint</th>
+                  <th>Position</th>
+                  <th>Voltage</th>
+                  <th>Temp</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="servo-table-body">
+                <tr>
+                  <td colspan="7">Load the config and read positions to populate the table.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel raw-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Raw Status</p>
+              <h2>Server snapshot</h2>
+            </div>
+          </div>
+          <pre id="status-view">Waiting for server...</pre>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Event Log</p>
+              <h2>Operator notes</h2>
+            </div>
+          </div>
+          <pre id="event-log">UI ready.</pre>
+        </section>
       </section>
     </main>
 

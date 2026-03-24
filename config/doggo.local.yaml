@@ -28,6 +28,37 @@ motion:
   sit_speed: 320
   sit_acceleration: 5
 
+walking:
+  enabled: true
+  gait: crawl
+  command_deadzone: 0.08
+  cycle_time_seconds: 3.2
+  swing_ratio: 0.25
+  hip_strafe_ticks: 45
+  knee_stride_ticks: 90
+  knee_lift_ticks: 60
+  foot_lift_ticks: 140
+  step_speed: 260
+  step_acceleration: 4
+  leg_order: [rear_left, front_right, rear_right, front_left]
+  legs:
+    front_left:
+      forward_sign: 1
+      strafe_sign: 1
+      turn_sign: 1
+    front_right:
+      forward_sign: 1
+      strafe_sign: 1
+      turn_sign: 1
+    rear_left:
+      forward_sign: 1
+      strafe_sign: 1
+      turn_sign: 1
+    rear_right:
+      forward_sign: 1
+      strafe_sign: 1
+      turn_sign: 1
+
 vision:
   enabled: false
   track_target: person

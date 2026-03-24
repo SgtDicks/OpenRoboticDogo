@@ -23,7 +23,7 @@ Owns robot modes and command arbitration:
 - standing
 - relaxing
 - teleop requested
-- walking scaffolded for later
+- walking via a first-pass crawl gait planner
 
 The supervisor is the place where joystick, browser, and future vision commands get merged.
 
@@ -53,10 +53,10 @@ without maintaining three separate front ends.
 
 ## What is intentionally missing
 
-- Gait generation
+- Measured-leg IK
 - Inverse kinematics
 - Balance control
 - IMU fusion
 - Person-follow logic
 
-Those pieces depend on real calibration data and measured geometry. This first code pass gets the robot safely online so those later layers have a clean base to sit on.
+Those pieces still depend on real calibration data and measured geometry. The current crawl gait is a conservative joint-space teleop layer, not the final locomotion stack.

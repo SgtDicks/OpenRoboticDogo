@@ -13,6 +13,11 @@ def test_example_config_loads() -> None:
     assert config.motion.stand_acceleration == 10
     assert config.motion.sit_speed == 500
     assert config.motion.sit_acceleration == 8
+    assert config.walking.enabled is True
+    assert config.walking.gait == "crawl"
+    assert config.walking.step_speed == 260
+    assert config.walking.step_acceleration == 4
+    assert config.walking.leg_order == ["rear_left", "front_right", "rear_right", "front_left"]
     assert len(config.stand_commands()) == 12
     assert config.storage_pose is not None
     assert config.storage_pose.front_right.hip_x == 2048
@@ -31,6 +36,8 @@ def test_example_config_loads() -> None:
     assert config.stand_position_for_servo(99) is None
     assert config.joint_config_for_servo(8).id == 8
     assert config.joint_config_for_servo(99) is None
+    assert config.walking.legs.front_left.forward_sign == 1
+    assert config.walking.legs.rear_right.turn_sign == 1
 
 
 def test_pose_commands_can_be_filtered_to_a_single_leg() -> None:

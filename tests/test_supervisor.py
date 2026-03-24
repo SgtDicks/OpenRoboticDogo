@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, call, patch
 
 from doggo.config import StandSequenceStep, load_config
 from doggo.control.supervisor import ControlSupervisor
+from doggo.models import TeleopAxes, TeleopCommand
 
 
 def test_order_by_sequence_prioritizes_requested_servos() -> None:
@@ -373,3 +374,133 @@ def test_stand_test_2_uses_test_2_midpoint_before_stand(tmp_path: Path) -> None:
         },
     ]
     sleep_mock.assert_awaited_once_with(1.0)
+
+
+def test_apply_teleop_runs_walk_frame_when_robot_is_standing(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+    runtime_state_path = tmp_path / "doggo.state.json"
+    stateful_supervisor = ControlSupervisor(
+        config,
+        servo_bus=None,
+        runtime_state_path=runtime_state_path,
+    )
+    stateful_supervisor._record_pose_command("stand")
+
+    class FakeBus:
+        is_open = True
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=runtime_state_path,
+    )
+    sync_calls: list[dict[str, object]] = []
+
+    async def fake_run_sync_pose(
+        commands: list[tuple[int, int]],
+        *,
+        speed: int,
+        acceleration: int,
+    ) -> None:
+        sync_calls.append(
+            {
+                "commands": commands,
+                "speed": speed,
+                "acceleration": acceleration,
+            }
+        )
+
+    supervisor._run_sync_pose = fake_run_sync_pose  # type: ignore[method-assign]
+    command = TeleopCommand(axes=TeleopAxes(forward=0.6))
+
+    with patch("doggo.control.gait.time.monotonic", return_value=10.0):
+        status = asyncio.run(supervisor.apply_teleop(command))
+
+    assert supervisor.state == "walking"
+    assert supervisor._last_command_pose == "walking"
+    assert sync_calls[0]["speed"] == config.walking.step_speed
+    assert sync_calls[0]["acceleration"] == config.walking.step_acceleration
+    assert any(
+        position != config.stand_position_for_servo(servo_id)
+        for servo_id, position in sync_calls[0]["commands"]  # type: ignore[index]
+    )
+    assert status["state"] == "walking"
+
+
+def test_apply_teleop_returns_to_stand_when_axes_go_neutral(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+    runtime_state_path = tmp_path / "doggo.state.json"
+    stateful_supervisor = ControlSupervisor(
+        config,
+        servo_bus=None,
+        runtime_state_path=runtime_state_path,
+    )
+    stateful_supervisor._record_pose_command("walking")
+
+    class FakeBus:
+        is_open = True
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=runtime_state_path,
+    )
+    sync_calls: list[dict[str, object]] = []
+
+    async def fake_run_sync_pose(
+        commands: list[tuple[int, int]],
+        *,
+        speed: int,
+        acceleration: int,
+    ) -> None:
+        sync_calls.append(
+            {
+                "commands": commands,
+                "speed": speed,
+                "acceleration": acceleration,
+            }
+        )
+
+    supervisor._run_sync_pose = fake_run_sync_pose  # type: ignore[method-assign]
+
+    status = asyncio.run(supervisor.apply_teleop(TeleopCommand()))
+
+    assert sync_calls == [
+        {
+            "commands": config.stand_commands(),
+            "speed": config.motion.stand_speed,
+            "acceleration": config.motion.stand_acceleration,
+        }
+    ]
+    assert supervisor._last_command_pose == "stand"
+    assert status["state"] == "standing"
+
+
+def test_apply_teleop_blocks_walking_when_robot_is_sitting(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+    runtime_state_path = tmp_path / "doggo.state.json"
+    stateful_supervisor = ControlSupervisor(
+        config,
+        servo_bus=None,
+        runtime_state_path=runtime_state_path,
+    )
+    stateful_supervisor._record_pose_command("sit")
+
+    class FakeBus:
+        is_open = True
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=runtime_state_path,
+    )
+
+    async def fail_run_sync_pose(*args, **kwargs) -> None:
+        raise AssertionError("Walking should stay blocked while the robot is sitting")
+
+    supervisor._run_sync_pose = fail_run_sync_pose  # type: ignore[method-assign]
+    status = asyncio.run(supervisor.apply_teleop(TeleopCommand(axes=TeleopAxes(forward=0.4))))
+
+    assert supervisor.state == "teleop_blocked"
+    assert "Move to stand first" in supervisor.last_message
+    assert status["state"] == "teleop_blocked"

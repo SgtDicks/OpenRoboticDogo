@@ -47,6 +47,37 @@ class MotionConfig(BaseModel):
     sit_acceleration: int = 8
 
 
+class WalkingLegTuning(BaseModel):
+    forward_sign: int = 1
+    strafe_sign: int = 1
+    turn_sign: int = 1
+
+
+class WalkingLegsConfig(BaseModel):
+    front_left: WalkingLegTuning = Field(default_factory=WalkingLegTuning)
+    front_right: WalkingLegTuning = Field(default_factory=WalkingLegTuning)
+    rear_left: WalkingLegTuning = Field(default_factory=WalkingLegTuning)
+    rear_right: WalkingLegTuning = Field(default_factory=WalkingLegTuning)
+
+
+class WalkingConfig(BaseModel):
+    enabled: bool = True
+    gait: Literal["crawl"] = "crawl"
+    command_deadzone: float = Field(default=0.08, gt=0.0, lt=1.0)
+    cycle_time_seconds: float = Field(default=3.2, gt=0.1)
+    swing_ratio: float = Field(default=0.25, gt=0.05, lt=0.95)
+    hip_strafe_ticks: int = 45
+    knee_stride_ticks: int = 90
+    knee_lift_ticks: int = 60
+    foot_lift_ticks: int = 140
+    step_speed: int = 260
+    step_acceleration: int = 4
+    leg_order: list[LegName] = Field(
+        default_factory=lambda: ["rear_left", "front_right", "rear_right", "front_left"]
+    )
+    legs: WalkingLegsConfig = Field(default_factory=WalkingLegsConfig)
+
+
 class VisionConfig(BaseModel):
     enabled: bool = False
     track_target: str = "person"
@@ -98,6 +129,7 @@ class AppConfig(BaseModel):
     web: WebConfig = Field(default_factory=WebConfig)
     esp32: Esp32Config = Field(default_factory=Esp32Config)
     motion: MotionConfig = Field(default_factory=MotionConfig)
+    walking: WalkingConfig = Field(default_factory=WalkingConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
     legs: LegsConfig
     stand_pose: StandPoseConfig

@@ -69,7 +69,7 @@ doggo --config config\doggo.local.yaml serve
 
 Open `http://<pi-ip>:8080`.
 
-## 8. Only add walking after this is true
+## 8. Only test walking after this is true
 
 - All 12 IDs respond reliably
 - Every joint neutral is known
@@ -77,4 +77,4 @@ Open `http://<pi-ip>:8080`.
 - Safe min/max limits are known
 - A stand pose works repeatedly
 
-That is the point where gait work becomes productive instead of risky.
+That is the point where gait testing becomes productive instead of risky. The current crawl gait is intentionally slow and should be tuned in very small increments from there.

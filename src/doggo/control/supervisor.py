@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from doggo.config import AppConfig, LEG_NAMES, LegName
-from doggo.control.gait import PlaceholderGaitPlanner
+from doggo.control.gait import CrawlGaitPlanner
 from doggo.hardware.sts3215 import ServoBusError, ServoScanResult, Sts3215Bus
 from doggo.models import TeleopCommand
 
@@ -33,7 +33,7 @@ class ControlSupervisor:
         self.last_message = "Supervisor initialized."
         self.last_scan: list[ServoScanResult] = []
         self.last_teleop: dict[str, CommandStamp] = {}
-        self.gait_planner = PlaceholderGaitPlanner()
+        self.gait_planner = CrawlGaitPlanner(config)
         self._lock = asyncio.Lock()
         self._running = False
         self.runtime_state_path = Path(runtime_state_path) if runtime_state_path else Path(".doggo_runtime_state.json")
@@ -264,23 +264,55 @@ class ControlSupervisor:
             elif command.mode == "relax" or command.buttons.relax:
                 await self.relax()
             else:
-                moving = any(
-                    abs(axis_value) > 0.05
-                    for axis_value in (
-                        command.axes.forward,
-                        command.axes.strafe,
-                        command.axes.turn,
-                    )
-                )
+                moving = self._teleop_axes_are_active(command)
+                blocked_pose = self._teleop_pose_blocker()
                 if moving:
-                    self.state = "teleop_requested"
-                    gait_status = self.gait_planner.accept(command)
-                    self.last_message = gait_status.reason
-                elif self.state == "teleop_requested":
+                    if blocked_pose:
+                        self.state = "teleop_blocked"
+                        self.last_message = f"Walking teleop is blocked while Doggo is in {blocked_pose}. Move to stand first."
+                    else:
+                        gait_frame = self.gait_planner.accept(command)
+                        if gait_frame.ready and self.servo_bus:
+                            await self._run_sync_pose(
+                                gait_frame.commands,
+                                speed=gait_frame.speed,
+                                acceleration=gait_frame.acceleration,
+                            )
+                            self.state = "walking"
+                            self.last_message = gait_frame.reason
+                            self._record_pose_command("walking")
+                        else:
+                            self.state = "teleop_requested"
+                            self.last_message = gait_frame.reason
+                elif self._last_command_pose == "walking" and self.servo_bus:
+                    await self._run_sync_pose(
+                        self.config.stand_commands(),
+                        speed=self.config.motion.stand_speed,
+                        acceleration=self.config.motion.stand_acceleration,
+                    )
+                    self.state = "standing"
+                    self.last_message = "Teleop inputs are neutral; Doggo settled back into stand."
+                    self._record_pose_command("stand")
+                elif self.state in {"teleop_requested", "teleop_blocked"}:
                     self.state = "idle"
                     self.last_message = "Teleop inputs are neutral."
 
         return self.status_snapshot()
+
+    def _teleop_axes_are_active(self, command: TeleopCommand) -> bool:
+        return any(
+            abs(axis_value) > self.config.walking.command_deadzone
+            for axis_value in (
+                command.axes.forward,
+                command.axes.strafe,
+                command.axes.turn,
+            )
+        )
+
+    def _teleop_pose_blocker(self) -> str | None:
+        if self._last_command_pose in {"sit", "storage", "relaxed"}:
+            return self._last_command_pose
+        return None
 
     async def scan_servos(self, start_id: int | None = None, end_id: int | None = None) -> list[ServoScanResult]:
         if not self.servo_bus:
