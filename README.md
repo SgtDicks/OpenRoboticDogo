@@ -18,8 +18,21 @@ The original repo set the mechanical direction, the spirit of the project, and t
 - Waveshare Bus Servo Adapter is used for the STS3215 servo bus.
 - Browser control is live for desktop and Steam Deck use.
 - ESP32 joystick support is scaffolded as a low-latency manual input path.
-- Servo discovery, calibration, stand, sit, storage, relax, and live web bring-up are working.
+- Servo discovery, calibration, stand, sit, storage, relax, motion recording, playback, and live web bring-up are working.
 - A first walking pass exists, but it is still being tuned and is not moving correctly yet.
+
+## Documentation
+
+- [docs/project-status.md](docs/project-status.md)
+  Current build status, what's working, and what still needs engineering work.
+- [docs/operator-guide.md](docs/operator-guide.md)
+  Day-to-day operator notes, main commands, and safe usage.
+- [docs/motion-recording.md](docs/motion-recording.md)
+  Recording, saving, and replaying motion clips.
+- [docs/bringup.md](docs/bringup.md)
+  Hardware bring-up and first servo discovery.
+- [docs/architecture.md](docs/architecture.md)
+  Software layout and design direction.
 
 ## Hardware and Print Files
 
@@ -60,7 +73,8 @@ The software here is a fresh control build shaped around the confirmed hardware:
 - STS3215 serial packet layer and Waveshare adapter access
 - servo scanning, ID assignment, single-servo moves, and readback
 - saved stand, sit, storage, and calibration poses
-- web dashboard with pose controls, live health, touch sliders, and servo monitor
+- web dashboard with pose controls, live health, touch sliders, servo monitor, and motion capture tools
+- variable-duration motion recording, saved recordings, and playback
 - first-pass crawl gait wiring for browser and future ESP32 teleop
 
 ### What still needs tuning
@@ -121,6 +135,11 @@ doggo --config config\doggo.local.yaml stand
 doggo --config config\doggo.local.yaml sit
 doggo --config config\doggo.local.yaml storage
 doggo --config config\doggo.local.yaml relax
+doggo --config config\doggo.local.yaml record --name wave --duration-ms 10000
+doggo --config config\doggo.local.yaml stop-recording
+doggo --config config\doggo.local.yaml save-recording --name Wave
+doggo --config config\doggo.local.yaml playback
+doggo --config config\doggo.local.yaml playback --name Wave
 doggo --config config\doggo.local.yaml serve
 ```
 
