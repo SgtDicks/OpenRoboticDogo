@@ -8,7 +8,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from doggo.hardware.sts3215 import ServoBusError
-from doggo.models import ServoAssignmentRequest, ServoMoveRequest, TeleopCommand
+from doggo.models import (
+    MotionPlaybackRequest,
+    MotionRecordRequest,
+    MotionSaveRequest,
+    ServoAssignmentRequest,
+    ServoMoveRequest,
+    TeleopCommand,
+)
 from doggo.runtime import DoggoRuntime
 
 
@@ -67,6 +74,75 @@ def create_app(config_path: str | Path = "config/doggo.local.yaml") -> FastAPI:
         except ServoBusError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"positions": positions}
+
+    @app.get("/api/motion/recording")
+    async def get_recording() -> dict:
+        supervisor = get_runtime().supervisor
+        return {
+            "recording": supervisor.recording_snapshot(),
+            "saved_recordings": supervisor.list_saved_recordings(),
+        }
+
+    @app.post("/api/motion/record")
+    async def record_motion(request: MotionRecordRequest) -> dict:
+        try:
+            recording = await get_runtime().supervisor.record_motion(
+                name=request.name,
+                duration_ms=request.duration_ms,
+                sample_ms=request.sample_ms,
+                idle_stop_seconds=request.idle_stop_seconds,
+                idle_threshold_ticks=request.idle_threshold_ticks,
+            )
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "recording": get_runtime().supervisor.recording_snapshot(),
+            "saved_recordings": get_runtime().supervisor.list_saved_recordings(),
+            "status": get_runtime().supervisor.status_snapshot(),
+            "clip": recording.model_dump(mode="json"),
+        }
+
+    @app.post("/api/motion/record/stop")
+    async def stop_recording() -> dict:
+        try:
+            snapshot = await get_runtime().supervisor.stop_recording()
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "recording": snapshot,
+            "saved_recordings": get_runtime().supervisor.list_saved_recordings(),
+            "status": get_runtime().supervisor.status_snapshot(),
+        }
+
+    @app.post("/api/motion/recording/save")
+    async def save_recording(request: MotionSaveRequest) -> dict:
+        try:
+            recording = get_runtime().supervisor.save_recording(request.name)
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "recording": get_runtime().supervisor.recording_snapshot(),
+            "saved_recordings": get_runtime().supervisor.list_saved_recordings(),
+            "saved": recording.model_dump(mode="json"),
+            "status": get_runtime().supervisor.status_snapshot(),
+        }
+
+    @app.post("/api/motion/playback")
+    async def playback_motion(request: MotionPlaybackRequest) -> dict:
+        try:
+            recording = await get_runtime().supervisor.playback_recording(
+                name=request.name,
+                speed=request.speed,
+                acceleration=request.acceleration,
+            )
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "recording": get_runtime().supervisor.recording_snapshot(),
+            "saved_recordings": get_runtime().supervisor.list_saved_recordings(),
+            "status": get_runtime().supervisor.status_snapshot(),
+            "clip": recording.model_dump(mode="json"),
+        }
 
     @app.post("/api/servos/{servo_id}/move")
     async def move_servo(servo_id: int, request: ServoMoveRequest) -> dict:

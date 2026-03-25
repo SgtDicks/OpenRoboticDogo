@@ -89,6 +89,7 @@ body {
 .control-help,
 .message-card p,
 .summary-note,
+.recording-summary,
 .panel td,
 .panel th {
   color: var(--muted);
@@ -196,6 +197,56 @@ h3 {
   border-radius: 22px;
   background: var(--panel-strong);
   border: 1px solid var(--line);
+}
+
+.recording-summary {
+  margin: 12px 0 0;
+  line-height: 1.45;
+}
+
+.recording-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.recording-grid.secondary {
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+  align-items: end;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.field span {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.76rem;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 11px 12px;
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.field.actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.field.actions .button {
+  margin-top: auto;
 }
 
 .button-grid {
@@ -427,7 +478,9 @@ h3 {
 
   .axis-grid,
   .preset-grid,
-  .health-grid {
+  .health-grid,
+  .recording-grid,
+  .recording-grid.secondary {
     grid-template-columns: 1fr;
   }
 }

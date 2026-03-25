@@ -137,11 +137,13 @@ class AppConfig(BaseModel):
     sit_pose: StandPoseConfig | None = None
     stand_to_sit_mid_pose: StandPoseConfig | None = None
     sit_to_stand_mid_pose: StandPoseConfig | None = None
+    sit_to_stand_front_prep_pose: StandPoseConfig | None = None
     sit_to_stand_mid_test_2_pose: StandPoseConfig | None = None
     max_pose: StandPoseConfig | None = None
     stand_sequence: list[StandSequenceStep] = Field(default_factory=list)
     max_pose_guard_ticks: int = 150
     sit_to_stand_mid_pause_ms: int = 500
+    sit_to_stand_front_prep_pause_ms: int = 0
 
     def iter_joint_configs(self) -> Iterator[tuple[LegName, JointName, ServoJointConfig]]:
         for leg_name in LEG_NAMES:
@@ -275,6 +277,26 @@ class AppConfig(BaseModel):
         for leg_name in self._selected_leg_names(leg_names):
             leg = getattr(self.legs, leg_name)
             pose = getattr(self.sit_to_stand_mid_test_2_pose, leg_name)
+            commands.extend(
+                [
+                    (leg.hip_x.id, pose.hip_x),
+                    (leg.knee_y.id, pose.knee_y),
+                    (leg.foot.id, pose.foot),
+                ]
+            )
+        return commands
+
+    def sit_to_stand_front_prep_commands(
+        self,
+        leg_names: list[LegName] | tuple[LegName, ...] | None = None,
+    ) -> list[tuple[int, int]]:
+        if self.sit_to_stand_front_prep_pose is None:
+            return []
+
+        commands: list[tuple[int, int]] = []
+        for leg_name in self._selected_leg_names(leg_names):
+            leg = getattr(self.legs, leg_name)
+            pose = getattr(self.sit_to_stand_front_prep_pose, leg_name)
             commands.extend(
                 [
                     (leg.hip_x.id, pose.hip_x),

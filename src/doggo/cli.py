@@ -68,6 +68,19 @@ def build_parser() -> argparse.ArgumentParser:
     sss_parser.add_argument("--leg", action="append", choices=LEG_NAMES, dest="legs", default=None)
     sss_parser.add_argument("--speed", type=int, default=None)
     sss_parser.add_argument("--acceleration", type=int, default=None)
+    record_parser = subparsers.add_parser("record", help="Record a whole-body motion clip.")
+    record_parser.add_argument("--name", default="last_capture")
+    record_parser.add_argument("--duration-ms", type=int, default=10_000)
+    record_parser.add_argument("--sample-ms", type=int, default=100)
+    record_parser.add_argument("--idle-stop-seconds", type=float, default=None)
+    record_parser.add_argument("--idle-threshold-ticks", type=int, default=15)
+    subparsers.add_parser("stop-recording", help="Stop the active motion recording.")
+    save_recording_parser = subparsers.add_parser("save-recording", help="Save the last motion recording under a name.")
+    save_recording_parser.add_argument("--name", required=True)
+    playback_parser = subparsers.add_parser("playback", help="Play back the latest recorded motion clip.")
+    playback_parser.add_argument("--name", default=None)
+    playback_parser.add_argument("--speed", type=int, default=None)
+    playback_parser.add_argument("--acceleration", type=int, default=None)
     subparsers.add_parser("relax", help="Disable torque for configured servos.")
     subparsers.add_parser("read-all", help="Read all configured servo positions.")
     serve_parser = subparsers.add_parser("serve", help="Run the web API.")
@@ -190,6 +203,32 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             print(supervisor.last_message)
+        elif args.command == "record":
+            recording = asyncio.run(
+                supervisor.record_motion(
+                    name=args.name,
+                    duration_ms=args.duration_ms,
+                    sample_ms=args.sample_ms,
+                    idle_stop_seconds=args.idle_stop_seconds,
+                    idle_threshold_ticks=args.idle_threshold_ticks,
+                )
+            )
+            print(recording.model_dump_json(indent=2))
+        elif args.command == "stop-recording":
+            snapshot = asyncio.run(supervisor.stop_recording())
+            print(json.dumps(snapshot, indent=2))
+        elif args.command == "save-recording":
+            recording = supervisor.save_recording(args.name)
+            print(recording.model_dump_json(indent=2))
+        elif args.command == "playback":
+            recording = asyncio.run(
+                supervisor.playback_recording(
+                    name=args.name,
+                    speed=args.speed,
+                    acceleration=args.acceleration,
+                )
+            )
+            print(recording.model_dump_json(indent=2))
         elif args.command == "relax":
             asyncio.run(supervisor.relax())
             print(supervisor.last_message)

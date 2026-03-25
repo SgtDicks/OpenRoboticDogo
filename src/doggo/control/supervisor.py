@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Any
 from doggo.config import AppConfig, LEG_NAMES, LegName
 from doggo.control.gait import CrawlGaitPlanner
 from doggo.hardware.sts3215 import ServoBusError, ServoScanResult, Sts3215Bus
-from doggo.models import TeleopCommand
+from doggo.models import MotionFrame, MotionRecording, TeleopCommand
 
 
 @dataclass(slots=True)
@@ -20,6 +21,10 @@ class CommandStamp:
 
 
 class ControlSupervisor:
+    _PLAYBACK_SPEED_MIN = 1
+    _PLAYBACK_SPEED_MAX = 4095
+    _DEFAULT_IDLE_THRESHOLD_TICKS = 15
+
     def __init__(
         self,
         config: AppConfig,
@@ -35,9 +40,18 @@ class ControlSupervisor:
         self.last_teleop: dict[str, CommandStamp] = {}
         self.gait_planner = CrawlGaitPlanner(config)
         self._lock = asyncio.Lock()
+        self._motion_lock = asyncio.Lock()
         self._running = False
         self.runtime_state_path = Path(runtime_state_path) if runtime_state_path else Path(".doggo_runtime_state.json")
+        self.recording_path = self.runtime_state_path.with_suffix(".recording.json")
+        self.recordings_dir = self.runtime_state_path.parent / "recordings"
+        self._recording_stop_event: asyncio.Event | None = None
+        self._recording_active = False
         self._last_command_pose = self._load_last_command_pose()
+        self.last_recording = self._load_last_recording()
+
+    def _monotonic(self) -> float:
+        return time.monotonic()
 
     def _load_last_command_pose(self) -> str | None:
         try:
@@ -58,6 +72,120 @@ class ControlSupervisor:
     def _record_pose_command(self, pose_name: str) -> None:
         self._last_command_pose = pose_name
         self._write_runtime_state()
+
+    def _load_last_recording(self) -> MotionRecording | None:
+        try:
+            payload = json.loads(self.recording_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        try:
+            return MotionRecording.model_validate(payload)
+        except Exception:
+            return None
+
+    def _write_last_recording(self) -> None:
+        if self.last_recording is None:
+            return
+        try:
+            self.recording_path.parent.mkdir(parents=True, exist_ok=True)
+            self.recording_path.write_text(
+                self.last_recording.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            return
+
+    def _sanitize_recording_name(self, name: str) -> str:
+        cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", name.strip())
+        cleaned = cleaned.strip("._-")
+        return cleaned or "clip"
+
+    def _saved_recording_path(self, name: str) -> Path:
+        sanitized = self._sanitize_recording_name(name)
+        return self.recordings_dir / f"{sanitized}.json"
+
+    def _load_recording_from_path(self, path: Path) -> MotionRecording | None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        try:
+            return MotionRecording.model_validate(payload)
+        except Exception:
+            return None
+
+    def list_saved_recordings(self) -> list[dict[str, Any]]:
+        if not self.recordings_dir.exists():
+            return []
+
+        saved: list[dict[str, Any]] = []
+        for path in sorted(self.recordings_dir.glob("*.json")):
+            recording = self._load_recording_from_path(path)
+            if recording is None:
+                continue
+            saved.append(
+                {
+                    "name": recording.name,
+                    "captured_at": recording.captured_at,
+                    "frame_count": recording.frame_count,
+                    "duration_ms": recording.duration_ms,
+                    "sample_ms": recording.sample_ms,
+                    "stop_reason": recording.stop_reason,
+                    "file": path.name,
+                }
+            )
+        return saved
+
+    def _load_saved_recording(self, name: str) -> MotionRecording:
+        path = self._saved_recording_path(name)
+        recording = self._load_recording_from_path(path)
+        if recording is None:
+            raise ServoBusError(f"No saved recording named {name!r} was found.")
+        return recording
+
+    def save_last_recording_as(self, name: str) -> MotionRecording:
+        if self.last_recording is None:
+            raise ServoBusError("No motion recording is available to save.")
+
+        saved_recording = self.last_recording.model_copy(update={"name": name})
+        path = self._saved_recording_path(name)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(saved_recording.model_dump_json(indent=2), encoding="utf-8")
+        except OSError as exc:
+            raise ServoBusError(f"Could not save recording {name!r}: {exc}") from exc
+        return saved_recording
+
+    def recording_snapshot(self) -> dict[str, Any]:
+        if self.last_recording is None:
+            return {
+                "available": False,
+                "active": self._recording_active,
+                "name": None,
+                "captured_at": None,
+                "frame_count": 0,
+                "duration_ms": 0,
+                "sample_ms": 0,
+                "stop_reason": None,
+                "idle_stop_seconds": None,
+                "idle_threshold_ticks": self._DEFAULT_IDLE_THRESHOLD_TICKS,
+                "servo_ids": [],
+                "saved_recordings": self.list_saved_recordings(),
+            }
+        return {
+            "available": True,
+            "active": self._recording_active,
+            "name": self.last_recording.name,
+            "captured_at": self.last_recording.captured_at,
+            "frame_count": self.last_recording.frame_count,
+            "duration_ms": self.last_recording.duration_ms,
+            "sample_ms": self.last_recording.sample_ms,
+            "stop_reason": self.last_recording.stop_reason,
+            "idle_stop_seconds": self.last_recording.idle_stop_seconds,
+            "idle_threshold_ticks": self.last_recording.idle_threshold_ticks,
+            "servo_ids": list(self.last_recording.servo_ids),
+            "saved_recordings": self.list_saved_recordings(),
+        }
 
     async def _is_near_pose(
         self,
@@ -85,6 +213,56 @@ class ControlSupervisor:
 
     def _command_map(self, commands: list[tuple[int, int]]) -> dict[int, int]:
         return {servo_id: position for servo_id, position in commands}
+
+    def _normalize_recording_frames(self, frames: list[MotionFrame]) -> list[MotionFrame]:
+        if not frames:
+            return []
+        origin_ms = frames[0].timestamp_ms
+        normalized: list[MotionFrame] = []
+        for frame in frames:
+            normalized.append(
+                MotionFrame(
+                    timestamp_ms=max(0, frame.timestamp_ms - origin_ms),
+                    positions=dict(frame.positions),
+                )
+            )
+        return normalized
+
+    def _playback_speed_for_frame(
+        self,
+        previous_positions: dict[int, int],
+        next_positions: dict[int, int],
+        delta_ms: int,
+    ) -> int:
+        if delta_ms <= 0:
+            return self.config.motion.default_speed
+
+        max_delta = 0
+        for servo_id, next_position in next_positions.items():
+            previous_position = previous_positions.get(servo_id)
+            if previous_position is None:
+                continue
+            max_delta = max(max_delta, abs(next_position - previous_position))
+
+        if max_delta <= 0:
+            return self.config.motion.default_speed
+
+        ticks_per_second = round((max_delta * 1000) / delta_ms)
+        return max(self._PLAYBACK_SPEED_MIN, min(self._PLAYBACK_SPEED_MAX, ticks_per_second))
+
+    def _has_major_change(
+        self,
+        previous_positions: dict[int, int],
+        next_positions: dict[int, int],
+        threshold_ticks: int,
+    ) -> bool:
+        for servo_id, next_position in next_positions.items():
+            previous_position = previous_positions.get(servo_id)
+            if previous_position is None:
+                continue
+            if abs(next_position - previous_position) >= threshold_ticks:
+                return True
+        return False
 
     def _move_index(self, commands: list[tuple[int, int]], servo_id: int) -> int | None:
         for index, (configured_servo_id, _) in enumerate(commands):
@@ -218,6 +396,61 @@ class ControlSupervisor:
             acceleration=acceleration,
         )
 
+    async def _capture_current_positions(self) -> dict[int, int]:
+        if not self.servo_bus:
+            raise ServoBusError("Servo bus is not configured.")
+        positions: dict[int, int] = {}
+        for servo_id in self.config.servo_ids():
+            try:
+                positions[servo_id] = await asyncio.to_thread(
+                    self.servo_bus.read_present_position,
+                    servo_id,
+                )
+            except ServoBusError:
+                continue
+        return positions
+
+    async def _run_main_stand_sequence(
+        self,
+        *,
+        speed: int,
+        acceleration: int,
+    ) -> None:
+        if self._last_command_pose == "sit":
+            prep_commands = self.config.sit_to_stand_front_prep_commands()
+            if prep_commands:
+                await self._run_sync_pose(
+                    prep_commands,
+                    speed=speed,
+                    acceleration=acceleration,
+                )
+                if self.config.sit_to_stand_front_prep_pause_ms > 0:
+                    await asyncio.sleep(self.config.sit_to_stand_front_prep_pause_ms / 1000.0)
+
+        midpoint_commands = self.config.sit_to_stand_mid_test_2_commands()
+        if not midpoint_commands:
+            await self._run_sync_pose(
+                self.config.stand_commands(),
+                speed=speed,
+                acceleration=acceleration,
+            )
+            return
+
+        rear_midpoint_commands = self.config.sit_to_stand_mid_test_2_commands(["rear_left", "rear_right"])
+        if rear_midpoint_commands:
+            await self._run_sync_pose(
+                rear_midpoint_commands,
+                speed=speed,
+                acceleration=acceleration,
+            )
+            await asyncio.sleep(1.0)
+
+        await self._run_sync_pose(
+            self.config.stand_commands(),
+            speed=speed,
+            acceleration=acceleration,
+        )
+
     async def start(self) -> None:
         self._running = True
 
@@ -246,6 +479,7 @@ class ControlSupervisor:
                 "camera_indexes": self.config.vision.camera_indexes,
             },
             "gait": {"ready": gait_status.ready, "reason": gait_status.reason},
+            "recording": self.recording_snapshot(),
             "active_sources": active_sources,
             "last_scan": [result.to_dict() for result in self.last_scan],
         }
@@ -273,11 +507,12 @@ class ControlSupervisor:
                     else:
                         gait_frame = self.gait_planner.accept(command)
                         if gait_frame.ready and self.servo_bus:
-                            await self._run_sync_pose(
-                                gait_frame.commands,
-                                speed=gait_frame.speed,
-                                acceleration=gait_frame.acceleration,
-                            )
+                            async with self._motion_lock:
+                                await self._run_sync_pose(
+                                    gait_frame.commands,
+                                    speed=gait_frame.speed,
+                                    acceleration=gait_frame.acceleration,
+                                )
                             self.state = "walking"
                             self.last_message = gait_frame.reason
                             self._record_pose_command("walking")
@@ -285,11 +520,12 @@ class ControlSupervisor:
                             self.state = "teleop_requested"
                             self.last_message = gait_frame.reason
                 elif self._last_command_pose == "walking" and self.servo_bus:
-                    await self._run_sync_pose(
-                        self.config.stand_commands(),
-                        speed=self.config.motion.stand_speed,
-                        acceleration=self.config.motion.stand_acceleration,
-                    )
+                    async with self._motion_lock:
+                        await self._run_sync_pose(
+                            self.config.stand_commands(),
+                            speed=self.config.motion.stand_speed,
+                            acceleration=self.config.motion.stand_acceleration,
+                        )
                     self.state = "standing"
                     self.last_message = "Teleop inputs are neutral; Doggo settled back into stand."
                     self._record_pose_command("stand")
@@ -319,7 +555,8 @@ class ControlSupervisor:
             raise ServoBusError("Servo bus is not configured.")
         start_id = start_id or self.config.servo_bus.scan_start_id
         end_id = end_id or self.config.servo_bus.scan_end_id
-        results = await asyncio.to_thread(self.servo_bus.scan, start_id, end_id)
+        async with self._motion_lock:
+            results = await asyncio.to_thread(self.servo_bus.scan, start_id, end_id)
         self.last_scan = results
         self.state = "scanned"
         self.last_message = f"Found {len(results)} servo(s) on the bus."
@@ -328,29 +565,186 @@ class ControlSupervisor:
     async def read_position(self, servo_id: int) -> int:
         if not self.servo_bus:
             raise ServoBusError("Servo bus is not configured.")
-        position = await asyncio.to_thread(self.servo_bus.read_present_position, servo_id)
+        async with self._motion_lock:
+            position = await asyncio.to_thread(self.servo_bus.read_present_position, servo_id)
         self.last_message = f"Read position for servo {servo_id}: {position}"
         return position
 
     async def read_all_positions(self) -> dict[int, int]:
         if not self.servo_bus:
             raise ServoBusError("Servo bus is not configured.")
-        positions: dict[int, int] = {}
-        for servo_id in self.config.servo_ids():
-            try:
-                positions[servo_id] = await asyncio.to_thread(
-                    self.servo_bus.read_present_position,
-                    servo_id,
-                )
-            except ServoBusError:
-                continue
+        async with self._motion_lock:
+            positions = await self._capture_current_positions()
         self.last_message = f"Read positions for {len(positions)} reachable configured servos."
         return positions
+
+    async def record_motion(
+        self,
+        *,
+        name: str = "last_capture",
+        duration_ms: int = 10_000,
+        sample_ms: int = 100,
+        idle_stop_seconds: float | None = None,
+        idle_threshold_ticks: int = _DEFAULT_IDLE_THRESHOLD_TICKS,
+    ) -> MotionRecording:
+        if not self.servo_bus:
+            raise ServoBusError("Servo bus is not configured.")
+        if self._recording_active:
+            raise ServoBusError("A motion recording is already in progress.")
+
+        frames: list[MotionFrame] = []
+        capture_started = self._monotonic()
+        self._recording_stop_event = asyncio.Event()
+        self._recording_active = True
+        self.state = "recording"
+        idle_note = ""
+        if idle_stop_seconds and idle_stop_seconds > 0:
+            idle_note = f" Auto-stop after {idle_stop_seconds:.1f}s without >= {idle_threshold_ticks} tick change."
+        self.last_message = (
+            f"Recording motion for {duration_ms}ms at {sample_ms}ms intervals.{idle_note}"
+        )
+
+        stop_reason = "unknown"
+        try:
+            async with self._motion_lock:
+                last_positions = await self._capture_current_positions()
+                if not last_positions:
+                    raise ServoBusError("Could not read any servos to start recording.")
+
+                last_major_change_time = self._monotonic()
+                previous_positions = dict(last_positions)
+
+                while True:
+                    loop_started = self._monotonic()
+                    observed = await self._capture_current_positions()
+                    if observed:
+                        if self._has_major_change(previous_positions, observed, idle_threshold_ticks):
+                            last_major_change_time = self._monotonic()
+                        previous_positions = dict(observed)
+                        last_positions.update(observed)
+
+                    elapsed_ms = int(round((self._monotonic() - capture_started) * 1000))
+                    frames.append(
+                        MotionFrame(
+                            timestamp_ms=elapsed_ms,
+                            positions=dict(sorted(last_positions.items())),
+                        )
+                    )
+
+                    if elapsed_ms >= duration_ms:
+                        stop_reason = "duration"
+                        break
+                    if self._recording_stop_event and self._recording_stop_event.is_set():
+                        stop_reason = "manual"
+                        break
+                    if idle_stop_seconds and idle_stop_seconds > 0:
+                        idle_elapsed = self._monotonic() - last_major_change_time
+                        if idle_elapsed >= idle_stop_seconds:
+                            stop_reason = "idle"
+                            break
+
+                    sleep_seconds = max(0.0, (sample_ms / 1000.0) - (self._monotonic() - loop_started))
+                    if sleep_seconds > 0:
+                        await asyncio.sleep(sleep_seconds)
+        finally:
+            self._recording_active = False
+            self._recording_stop_event = None
+
+        normalized_frames = self._normalize_recording_frames(frames)
+        actual_duration_ms = normalized_frames[-1].timestamp_ms if normalized_frames else 0
+        self.last_recording = MotionRecording(
+            name=name,
+            duration_ms=actual_duration_ms,
+            sample_ms=sample_ms,
+            stop_reason=stop_reason if stop_reason in {"duration", "manual", "idle"} else "unknown",
+            idle_stop_seconds=idle_stop_seconds,
+            idle_threshold_ticks=idle_threshold_ticks,
+            servo_ids=self.config.servo_ids(),
+            frames=normalized_frames,
+        )
+        self._write_last_recording()
+        self.state = "recorded"
+        self.last_message = (
+            f"Recorded {self.last_recording.frame_count} frame(s) "
+            f"over {self.last_recording.duration_ms}ms. Stop reason: {self.last_recording.stop_reason}."
+        )
+        self._record_pose_command("recorded")
+        return self.last_recording
+
+    async def stop_recording(self) -> dict[str, Any]:
+        if not self._recording_active or self._recording_stop_event is None:
+            self.last_message = "No motion recording is currently running."
+            return self.recording_snapshot()
+
+        self._recording_stop_event.set()
+        self.last_message = "Stop requested for the active motion recording."
+        return self.recording_snapshot()
+
+    def save_recording(self, name: str) -> MotionRecording:
+        saved = self.save_last_recording_as(name)
+        self.last_message = f"Saved recording as {saved.name}."
+        return saved
+
+    async def playback_recording(
+        self,
+        *,
+        name: str | None = None,
+        speed: int | None = None,
+        acceleration: int | None = None,
+    ) -> MotionRecording:
+        if not self.servo_bus:
+            raise ServoBusError("Servo bus is not configured.")
+        recording = self._load_saved_recording(name) if name else self.last_recording
+        if recording is None:
+            raise ServoBusError("No motion recording is available yet.")
+        if not recording.frames:
+            raise ServoBusError("The saved motion recording has no frames.")
+
+        move_speed = speed or self.config.motion.default_speed
+        move_acc = acceleration or self.config.motion.default_acceleration
+        self.state = "playback"
+        self.last_message = f"Playing back recording {recording.name}."
+
+        async with self._motion_lock:
+            current_positions = await self._capture_current_positions()
+            previous_positions = current_positions if current_positions else dict(recording.frames[0].positions)
+            for index, frame in enumerate(recording.frames):
+                commands = sorted(frame.positions.items())
+                frame_speed = (
+                    speed
+                    if speed is not None
+                    else self._playback_speed_for_frame(
+                        previous_positions,
+                        frame.positions,
+                        frame.timestamp_ms if index == 0 else frame.timestamp_ms - recording.frames[index - 1].timestamp_ms,
+                    )
+                )
+                await self._run_sync_pose(
+                    commands,
+                    speed=frame_speed if speed is None else move_speed,
+                    acceleration=move_acc,
+                )
+                previous_positions = dict(frame.positions)
+                if index + 1 >= len(recording.frames):
+                    continue
+                next_frame = recording.frames[index + 1]
+                delay_ms = max(0, next_frame.timestamp_ms - frame.timestamp_ms)
+                if delay_ms > 0:
+                    await asyncio.sleep(delay_ms / 1000.0)
+
+        self.state = "playback_complete"
+        self.last_message = (
+            f"Played back {recording.frame_count} frame(s) "
+            f"from {recording.name}."
+        )
+        self._record_pose_command("playback")
+        return recording
 
     async def assign_servo_id(self, current_id: int, new_id: int) -> None:
         if not self.servo_bus:
             raise ServoBusError("Servo bus is not configured.")
-        await asyncio.to_thread(self.servo_bus.set_servo_id, current_id, new_id)
+        async with self._motion_lock:
+            await asyncio.to_thread(self.servo_bus.set_servo_id, current_id, new_id)
         self.state = "configured"
         self.last_message = f"Assigned servo ID {current_id} -> {new_id}."
         self._record_pose_command("manual")
@@ -366,8 +760,9 @@ class ControlSupervisor:
             raise ServoBusError("Servo bus is not configured.")
         move_speed = speed or self.config.motion.default_speed
         move_acc = acceleration or self.config.motion.default_acceleration
-        await asyncio.to_thread(self.servo_bus.set_torque_enabled, servo_id, True)
-        await asyncio.to_thread(self.servo_bus.move, servo_id, position, move_speed, move_acc)
+        async with self._motion_lock:
+            await asyncio.to_thread(self.servo_bus.set_torque_enabled, servo_id, True)
+            await asyncio.to_thread(self.servo_bus.move, servo_id, position, move_speed, move_acc)
         self.state = "calibrating"
         self.last_message = f"Moved servo {servo_id} to {position} ticks."
         self._record_pose_command("manual")
@@ -391,34 +786,35 @@ class ControlSupervisor:
 
         move_speed = speed or self.config.motion.default_speed
         move_acc = acceleration or self.config.motion.default_acceleration
-        current = await asyncio.to_thread(self.servo_bus.read_present_position, servo_id)
-        joint = self.config.joint_config_for_servo(servo_id)
+        async with self._motion_lock:
+            current = await asyncio.to_thread(self.servo_bus.read_present_position, servo_id)
+            joint = self.config.joint_config_for_servo(servo_id)
 
-        if joint is not None and not (joint.min_ticks <= current <= joint.max_ticks):
-            raise ServoBusError(
-                f"Servo {servo_id} current position {current} is outside configured range "
-                f"{joint.min_ticks}..{joint.max_ticks}. Update calibration before step testing."
-            )
+            if joint is not None and not (joint.min_ticks <= current <= joint.max_ticks):
+                raise ServoBusError(
+                    f"Servo {servo_id} current position {current} is outside configured range "
+                    f"{joint.min_ticks}..{joint.max_ticks}. Update calibration before step testing."
+                )
 
-        low_target = current - delta
-        high_target = current + delta
-        if joint is not None:
-            low_target = max(joint.min_ticks, low_target)
-            high_target = min(joint.max_ticks, high_target)
+            low_target = current - delta
+            high_target = current + delta
+            if joint is not None:
+                low_target = max(joint.min_ticks, low_target)
+                high_target = min(joint.max_ticks, high_target)
 
-        positions = [
-            round(low_target + ((high_target - low_target) * index / (steps - 1)))
-            for index in range(steps)
-        ]
-        sequence = positions + positions[-2::-1]
+            positions = [
+                round(low_target + ((high_target - low_target) * index / (steps - 1)))
+                for index in range(steps)
+            ]
+            sequence = positions + positions[-2::-1]
 
-        self.state = "calibrating"
-        for target in sequence:
-            await asyncio.to_thread(self.servo_bus.move, servo_id, target, move_speed, move_acc)
+            self.state = "calibrating"
+            for target in sequence:
+                await asyncio.to_thread(self.servo_bus.move, servo_id, target, move_speed, move_acc)
+                await asyncio.sleep(hold_ms / 1000.0)
+
+            await asyncio.to_thread(self.servo_bus.move, servo_id, current, move_speed, move_acc)
             await asyncio.sleep(hold_ms / 1000.0)
-
-        await asyncio.to_thread(self.servo_bus.move, servo_id, current, move_speed, move_acc)
-        await asyncio.sleep(hold_ms / 1000.0)
 
         summary = {
             "servo_id": servo_id,
@@ -446,39 +842,24 @@ class ControlSupervisor:
             return
         move_speed = speed or self.config.motion.stand_speed
         move_acc = acceleration or self.config.motion.stand_acceleration
-        commands = self.config.stand_commands(leg_names)
 
-        # Leaving sit is the one transition where the whole body should lift together.
-        use_sync_stand = leg_names is None and (
-            self._last_command_pose == "sit" or await self._is_near_pose(self.config.sit_commands())
-        )
-
-        if use_sync_stand:
-            midpoint_commands = self.config.sit_to_stand_mid_commands()
-            if midpoint_commands:
-                await self._run_sync_pose(
-                    midpoint_commands,
+        async with self._motion_lock:
+            if leg_names is None:
+                await self._run_main_stand_sequence(
                     speed=move_speed,
                     acceleration=move_acc,
                 )
-                await asyncio.sleep(self.config.sit_to_stand_mid_pause_ms / 1000.0)
-            await self._run_sync_pose(
-                commands,
-                speed=move_speed,
-                acceleration=move_acc,
-            )
-        else:
-            target_servo_ids = {
-                servo_id for servo_id, _ in commands
-            }
-            servo_sequence, wait_map = self._sequence_and_waits_for_servo_ids(target_servo_ids)
-            await self._run_ordered_pose(
-                commands,
-                speed=move_speed,
-                acceleration=move_acc,
-                wait_map_ms=wait_map,
-                servo_sequence=servo_sequence,
-            )
+            else:
+                commands = self.config.stand_commands(leg_names)
+                target_servo_ids = {servo_id for servo_id, _ in commands}
+                servo_sequence, wait_map = self._sequence_and_waits_for_servo_ids(target_servo_ids)
+                await self._run_ordered_pose(
+                    commands,
+                    speed=move_speed,
+                    acceleration=move_acc,
+                    wait_map_ms=wait_map,
+                    servo_sequence=servo_sequence,
+                )
         self.state = "standing"
         if leg_names is None:
             self._record_pose_command("stand")
@@ -498,24 +879,13 @@ class ControlSupervisor:
             self.state = "standing"
             self.last_message = "Stand test 2 requested, but servo bus is not configured."
             return
-        midpoint_commands = self.config.sit_to_stand_mid_test_2_commands()
-        if not midpoint_commands:
-            raise ServoBusError("Stand test 2 midpoint pose is not configured.")
-
         move_speed = speed or self.config.motion.stand_speed
         move_acc = acceleration or self.config.motion.stand_acceleration
-        rear_midpoint_commands = self.config.sit_to_stand_mid_test_2_commands(["rear_left", "rear_right"])
-        await self._run_sync_pose(
-            rear_midpoint_commands,
-            speed=move_speed,
-            acceleration=move_acc,
-        )
-        await asyncio.sleep(1.0)
-        await self._run_sync_pose(
-            self.config.stand_commands(),
-            speed=move_speed,
-            acceleration=move_acc,
-        )
+        async with self._motion_lock:
+            await self._run_main_stand_sequence(
+                speed=move_speed,
+                acceleration=move_acc,
+            )
         self.state = "standing"
         self._record_pose_command("stand")
         self.last_message = "Moved Doggo into the configured stand pose via stand test 2."
@@ -544,13 +914,14 @@ class ControlSupervisor:
             target_servo_ids,
             reverse=True,
         )
-        await self._run_ordered_pose(
-            self.config.storage_commands(leg_names),
-            speed=move_speed,
-            acceleration=move_acc,
-            wait_map_ms=wait_map,
-            servo_sequence=servo_sequence,
-        )
+        async with self._motion_lock:
+            await self._run_ordered_pose(
+                self.config.storage_commands(leg_names),
+                speed=move_speed,
+                acceleration=move_acc,
+                wait_map_ms=wait_map,
+                servo_sequence=servo_sequence,
+            )
         self.state = "storage"
         if leg_names is None:
             self._record_pose_command("storage")
@@ -579,53 +950,54 @@ class ControlSupervisor:
         move_acc = acceleration or self.config.motion.sit_acceleration
         use_midpoint_sit = leg_names is None and self._last_command_pose == "stand"
 
-        if use_midpoint_sit:
-            midpoint_commands = self.config.stand_to_sit_mid_commands()
-            if midpoint_commands:
-                await self._run_sync_pose(
-                    midpoint_commands,
-                    speed=move_speed,
-                    acceleration=move_acc,
-                )
-                await asyncio.sleep(self.config.sit_to_stand_mid_pause_ms / 1000.0)
+        async with self._motion_lock:
+            if use_midpoint_sit:
+                midpoint_commands = self.config.stand_to_sit_mid_commands()
+                if midpoint_commands:
+                    await self._run_sync_pose(
+                        midpoint_commands,
+                        speed=move_speed,
+                        acceleration=move_acc,
+                    )
+                    await asyncio.sleep(self.config.sit_to_stand_mid_pause_ms / 1000.0)
 
-        requested_legs = tuple(leg_names) if leg_names else LEG_NAMES
-        rear_legs = [leg_name for leg_name in requested_legs if leg_name.startswith("rear_")]
-        front_legs = [leg_name for leg_name in requested_legs if leg_name.startswith("front_")]
+            requested_legs = tuple(leg_names) if leg_names else LEG_NAMES
+            rear_legs = [leg_name for leg_name in requested_legs if leg_name.startswith("rear_")]
+            front_legs = [leg_name for leg_name in requested_legs if leg_name.startswith("front_")]
 
-        if rear_legs:
-            rear_commands = self.config.sit_commands(rear_legs)
-            if len(rear_legs) > 1:
-                await self._run_sync_pose(
-                    rear_commands,
-                    speed=move_speed,
-                    acceleration=move_acc,
-                )
-            else:
-                rear_servo_ids = {servo_id for servo_id, _ in rear_commands}
-                rear_sequence, rear_wait_map = self._sequence_and_waits_for_servo_ids(rear_servo_ids)
+            if rear_legs:
+                rear_commands = self.config.sit_commands(rear_legs)
+                if len(rear_legs) > 1:
+                    await self._run_sync_pose(
+                        rear_commands,
+                        speed=move_speed,
+                        acceleration=move_acc,
+                    )
+                else:
+                    rear_servo_ids = {servo_id for servo_id, _ in rear_commands}
+                    rear_sequence, rear_wait_map = self._sequence_and_waits_for_servo_ids(rear_servo_ids)
+                    await self._run_ordered_pose(
+                        rear_commands,
+                        speed=move_speed,
+                        acceleration=move_acc,
+                        wait_map_ms=rear_wait_map,
+                        servo_sequence=rear_sequence,
+                    )
+
+            if rear_legs and front_legs:
+                await asyncio.sleep(0.5)
+
+            if front_legs:
+                front_commands = self.config.sit_commands(front_legs)
+                front_servo_ids = {servo_id for servo_id, _ in front_commands}
+                front_sequence, front_wait_map = self._sequence_and_waits_for_servo_ids(front_servo_ids)
                 await self._run_ordered_pose(
-                    rear_commands,
+                    front_commands,
                     speed=move_speed,
                     acceleration=move_acc,
-                    wait_map_ms=rear_wait_map,
-                    servo_sequence=rear_sequence,
+                    wait_map_ms=front_wait_map,
+                    servo_sequence=front_sequence,
                 )
-
-        if rear_legs and front_legs:
-            await asyncio.sleep(0.5)
-
-        if front_legs:
-            front_commands = self.config.sit_commands(front_legs)
-            front_servo_ids = {servo_id for servo_id, _ in front_commands}
-            front_sequence, front_wait_map = self._sequence_and_waits_for_servo_ids(front_servo_ids)
-            await self._run_ordered_pose(
-                front_commands,
-                speed=move_speed,
-                acceleration=move_acc,
-                wait_map_ms=front_wait_map,
-                servo_sequence=front_sequence,
-            )
 
         self.state = "sitting"
         if leg_names is None:
@@ -658,12 +1030,13 @@ class ControlSupervisor:
             self.last_message = "Relax requested, but servo bus is not configured."
             return
         relaxed_ids: list[int] = []
-        for servo_id in self.config.servo_ids():
-            try:
-                await asyncio.to_thread(self.servo_bus.set_torque_enabled, servo_id, False)
-                relaxed_ids.append(servo_id)
-            except ServoBusError:
-                continue
+        async with self._motion_lock:
+            for servo_id in self.config.servo_ids():
+                try:
+                    await asyncio.to_thread(self.servo_bus.set_torque_enabled, servo_id, False)
+                    relaxed_ids.append(servo_id)
+                except ServoBusError:
+                    continue
         self.state = "relaxed"
         self._record_pose_command("relaxed")
         self.last_message = f"Torque disabled on reachable servos: {relaxed_ids}."

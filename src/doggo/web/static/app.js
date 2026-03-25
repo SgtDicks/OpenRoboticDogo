@@ -12,6 +12,16 @@ const healthSources = document.getElementById("health-sources");
 const lastMessage = document.getElementById("last-message");
 const walkingProfile = document.getElementById("walking-profile");
 const servoTableBody = document.getElementById("servo-table-body");
+const recordingSummary = document.getElementById("recording-summary");
+const motionRecordButton = document.getElementById("motion-record");
+const motionStopButton = document.getElementById("motion-stop");
+const motionPlaybackButton = document.getElementById("motion-playback");
+const motionSaveButton = document.getElementById("motion-save");
+const motionPlaybackSavedButton = document.getElementById("motion-playback-saved");
+const motionNameInput = document.getElementById("motion-name");
+const motionDurationInput = document.getElementById("motion-duration-seconds");
+const motionIdleInput = document.getElementById("motion-idle-seconds");
+const savedRecordingsSelect = document.getElementById("saved-recordings");
 
 const axisForward = document.getElementById("axis-forward");
 const axisStrafe = document.getElementById("axis-strafe");
@@ -34,6 +44,9 @@ let latestConfig = null;
 let latestPositions = {};
 let latestScan = new Map();
 let lastTeleopErrorAt = 0;
+let motionBusy = false;
+let motionStatusTimer = null;
+let latestSavedRecordings = [];
 
 const keyboardAxes = { forward: 0, strafe: 0, turn: 0 };
 const touchAxes = { forward: 0, strafe: 0, turn: 0 };
@@ -187,6 +200,76 @@ function renderWalkingProfile(config) {
   walkingProfile.innerHTML = chips.map((chip) => `<span class="chip">${chip}</span>`).join("");
 }
 
+function renderSavedRecordings(savedRecordings = []) {
+  latestSavedRecordings = Array.isArray(savedRecordings) ? savedRecordings : [];
+  if (!latestSavedRecordings.length) {
+    savedRecordingsSelect.innerHTML = '<option value="">No saved clips yet</option>';
+    return;
+  }
+
+  const currentValue = savedRecordingsSelect.value;
+  savedRecordingsSelect.innerHTML = latestSavedRecordings
+    .map((entry) => `<option value="${entry.name}">${entry.name} (${(entry.duration_ms / 1000).toFixed(1)}s)</option>`)
+    .join("");
+
+  if (latestSavedRecordings.some((entry) => entry.name === currentValue)) {
+    savedRecordingsSelect.value = currentValue;
+  }
+}
+
+function renderRecording(recording) {
+  if (!recording?.available) {
+    recordingSummary.textContent = recording?.active
+      ? "Recording now."
+      : "No recording saved yet.";
+    return;
+  }
+
+  const durationSeconds = (recording.duration_ms / 1000).toFixed(1);
+  const servoCount = Array.isArray(recording.servo_ids) ? recording.servo_ids.length : 0;
+  const stopReason = recording.stop_reason ? ` | stop=${recording.stop_reason}` : "";
+  recordingSummary.textContent =
+    `${recording.name} | ${recording.frame_count} frames | ${durationSeconds}s | `
+    + `${recording.sample_ms}ms sample | ${servoCount} servos${stopReason}`;
+}
+
+function setMotionControlsBusy(isBusy) {
+  motionRecordButton.disabled = isBusy;
+  motionPlaybackButton.disabled = isBusy;
+  motionSaveButton.disabled = isBusy;
+  motionPlaybackSavedButton.disabled = isBusy || !latestSavedRecordings.length;
+  motionStopButton.disabled = !isBusy;
+  motionNameInput.disabled = isBusy;
+  motionDurationInput.disabled = isBusy;
+  motionIdleInput.disabled = isBusy;
+  savedRecordingsSelect.disabled = isBusy || !latestSavedRecordings.length;
+}
+
+function stopMotionCountdown() {
+  if (motionStatusTimer) {
+    window.clearInterval(motionStatusTimer);
+    motionStatusTimer = null;
+  }
+}
+
+function startRecordingCountdown(durationMs, idleStopSeconds) {
+  stopMotionCountdown();
+  const deadline = Date.now() + durationMs;
+
+  const renderCountdown = () => {
+    const remainingMs = Math.max(0, deadline - Date.now());
+    const remainingSeconds = (remainingMs / 1000).toFixed(1);
+    const idleText = idleStopSeconds > 0
+      ? ` Auto-stop also triggers after ${idleStopSeconds.toFixed(1)}s of low movement.`
+      : "";
+    recordingSummary.textContent =
+      `Recording now. ${remainingSeconds}s left. If Doggo is relaxed, move it by hand through the motion you want to capture.${idleText}`;
+  };
+
+  renderCountdown();
+  motionStatusTimer = window.setInterval(renderCountdown, 100);
+}
+
 function flattenServoLayout(config) {
   if (!config?.legs) {
     return [];
@@ -272,6 +355,8 @@ function renderStatus(status) {
   const gaitReason = status.gait?.ready ? "Crawl gait ready" : status.gait?.reason || "Unavailable";
   gaitState.textContent = gaitReason;
   lastMessage.textContent = status.last_message || "No supervisor message yet.";
+  renderRecording(status.recording);
+  renderSavedRecordings(status.recording?.saved_recordings || latestSavedRecordings);
 
   if (Array.isArray(status.last_scan)) {
     latestScan = new Map(status.last_scan.map((entry) => [entry.servo_id, entry]));
@@ -289,6 +374,35 @@ async function loadConfig() {
   } catch (error) {
     log(`Config load failed: ${error.message}`);
   }
+}
+
+async function loadRecording() {
+  try {
+    const payload = await fetchJson("/api/motion/recording");
+    renderRecording(payload.recording);
+    renderSavedRecordings(payload.saved_recordings || payload.recording?.saved_recordings || []);
+  } catch (error) {
+    log(`Recording load failed: ${error.message}`);
+  }
+}
+
+function recordingName() {
+  const value = motionNameInput.value.trim();
+  return value || "last_capture";
+}
+
+function recordDurationMs() {
+  const seconds = Number(motionDurationInput.value || 10);
+  const safeSeconds = Number.isFinite(seconds) ? seconds : 10;
+  return Math.max(1, Math.min(300, safeSeconds)) * 1000;
+}
+
+function idleStopSeconds() {
+  const seconds = Number(motionIdleInput.value || 0);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+  return Math.max(0.5, Math.min(600, seconds));
 }
 
 async function refreshHealth() {
@@ -335,8 +449,106 @@ async function sendAction(url, label) {
   }
 }
 
+async function recordMotion() {
+  const durationMs = recordDurationMs();
+  const idleSeconds = idleStopSeconds();
+  motionBusy = true;
+  setMotionControlsBusy(true);
+  motionRecordButton.textContent = "Recording...";
+  startRecordingCountdown(durationMs, idleSeconds || 0);
+  log(`Motion recording started for ${(durationMs / 1000).toFixed(1)} seconds.`);
+  try {
+    const payload = await fetchJson("/api/motion/record", {
+      method: "POST",
+      body: JSON.stringify({
+        name: recordingName(),
+        duration_ms: durationMs,
+        sample_ms: 100,
+        idle_stop_seconds: idleSeconds,
+        idle_threshold_ticks: 15,
+      }),
+    });
+    renderRecording(payload.recording);
+    renderSavedRecordings(payload.saved_recordings || []);
+    renderStatus(payload.status);
+    log(`Motion record ok: ${payload.clip.name} captured (${payload.clip.stop_reason}).`);
+  } catch (error) {
+    recordingSummary.textContent = "Motion recording failed. Check the event log and try again.";
+    log(`Motion record failed: ${error.message}`);
+  } finally {
+    stopMotionCountdown();
+    motionBusy = false;
+    setMotionControlsBusy(false);
+    motionRecordButton.textContent = "Record";
+  }
+}
+
+async function stopMotionRecording() {
+  try {
+    const payload = await fetchJson("/api/motion/record/stop", {
+      method: "POST",
+      body: "{}",
+    });
+    renderRecording(payload.recording);
+    renderSavedRecordings(payload.saved_recordings || []);
+    renderStatus(payload.status);
+    recordingSummary.textContent = "Stop requested. Waiting for the current sample to finish.";
+    log("Motion recording stop requested.");
+  } catch (error) {
+    log(`Motion stop failed: ${error.message}`);
+  }
+}
+
+async function saveMotionRecording() {
+  try {
+    const payload = await fetchJson("/api/motion/recording/save", {
+      method: "POST",
+      body: JSON.stringify({ name: recordingName() }),
+    });
+    renderRecording(payload.recording);
+    renderSavedRecordings(payload.saved_recordings || []);
+    renderStatus(payload.status);
+    log(`Saved recording as ${payload.saved.name}.`);
+  } catch (error) {
+    log(`Save recording failed: ${error.message}`);
+  }
+}
+
+async function playbackMotion(name = null) {
+  motionBusy = true;
+  setMotionControlsBusy(true);
+  motionPlaybackButton.textContent = name ? "Play Last" : "Playing...";
+  motionPlaybackSavedButton.textContent = name ? "Playing..." : "Play Saved";
+  recordingSummary.textContent = name
+    ? `Playing saved clip ${name} now.`
+    : "Playing the last motion clip now.";
+  log(name ? `Saved motion playback started: ${name}.` : "Motion playback started.");
+  try {
+    const payload = await fetchJson("/api/motion/playback", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    renderRecording(payload.recording);
+    renderSavedRecordings(payload.saved_recordings || []);
+    renderStatus(payload.status);
+    log(`Motion playback ok: ${payload.clip.name} replayed.`);
+  } catch (error) {
+    recordingSummary.textContent = "Motion playback failed. Check the event log and try again.";
+    log(`Motion playback failed: ${error.message}`);
+  } finally {
+    motionBusy = false;
+    setMotionControlsBusy(false);
+    motionPlaybackButton.textContent = "Play Last";
+    motionPlaybackSavedButton.textContent = "Play Saved";
+  }
+}
+
 async function sendTeleop(command) {
   updateAxisReadout(command.axes);
+
+  if (motionBusy) {
+    return;
+  }
 
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(command));
@@ -417,6 +629,16 @@ function bindButtons() {
   document.getElementById("pose-sit").addEventListener("click", () => sendAction("/api/pose/sit", "Sit"));
   document.getElementById("pose-storage").addEventListener("click", () => sendAction("/api/pose/storage", "Storage"));
   document.getElementById("pose-relax").addEventListener("click", () => sendAction("/api/pose/relax", "Relax"));
+  motionRecordButton.addEventListener("click", recordMotion);
+  motionStopButton.addEventListener("click", stopMotionRecording);
+  motionPlaybackButton.addEventListener("click", () => playbackMotion());
+  motionSaveButton.addEventListener("click", saveMotionRecording);
+  motionPlaybackSavedButton.addEventListener("click", () => {
+    if (!savedRecordingsSelect.value) {
+      return;
+    }
+    playbackMotion(savedRecordingsSelect.value);
+  });
   document.getElementById("center-axes").addEventListener("click", resetTouchAxes);
 
   document.querySelectorAll(".preset").forEach((button) => {
@@ -459,6 +681,8 @@ async function bootstrap() {
   bindButtons();
   bindInputs();
   await loadConfig();
+  await loadRecording();
+  setMotionControlsBusy(false);
   await refreshHealth();
   await readPositions();
   connectSocket();

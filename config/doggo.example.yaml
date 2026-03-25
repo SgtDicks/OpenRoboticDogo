@@ -232,6 +232,24 @@ sit_to_stand_mid_pose:
     knee_y: 2048
     foot: 2048
 
+sit_to_stand_front_prep_pose:
+  front_left:
+    hip_x: 2048
+    knee_y: 2148
+    foot: 2048
+  front_right:
+    hip_x: 2048
+    knee_y: 2148
+    foot: 2048
+  rear_left:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+  rear_right:
+    hip_x: 2048
+    knee_y: 2048
+    foot: 2048
+
 sit_to_stand_mid_test_2_pose:
   front_left:
     hip_x: 2048
@@ -269,3 +287,4 @@ max_pose:
     foot: 2048
 
 sit_to_stand_mid_pause_ms: 500
+sit_to_stand_front_prep_pause_ms: 500

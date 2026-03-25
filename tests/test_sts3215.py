@@ -1,7 +1,13 @@
+from unittest.mock import patch
+
+import serial
+
 from doggo.hardware.sts3215 import (
     BROADCAST_ID,
     INST_PING,
     INST_SYNC_WRITE,
+    ServoBusError,
+    Sts3215Bus,
     build_packet,
     compute_checksum,
     parse_status_packet,
@@ -28,3 +34,15 @@ def test_broadcast_sync_packet_checksum() -> None:
     assert packet[1] == 0xFF
     assert packet[2] == BROADCAST_ID
     assert packet[-1] == compute_checksum(list(packet[:-1]))
+
+
+def test_open_wraps_serial_errors_as_servo_bus_error() -> None:
+    bus = Sts3215Bus("COM4")
+
+    with patch("doggo.hardware.sts3215.serial.Serial", side_effect=serial.SerialException("busy")):
+        try:
+            bus.open()
+        except ServoBusError as exc:
+            assert "Could not open servo bus on COM4" in str(exc)
+        else:
+            raise AssertionError("Expected ServoBusError when Serial raises SerialException")

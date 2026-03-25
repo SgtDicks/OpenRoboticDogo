@@ -133,17 +133,24 @@ class Sts3215Bus:
     def open(self) -> None:
         if self._serial and self._serial.is_open:
             return
-        self._serial = serial.Serial(
-            port=self.device,
-            baudrate=self.baud_rate,
-            bytesize=serial.EIGHTBITS,
-            timeout=0.002,
-        )
-        self._serial.reset_input_buffer()
+        try:
+            self._serial = serial.Serial(
+                port=self.device,
+                baudrate=self.baud_rate,
+                bytesize=serial.EIGHTBITS,
+                timeout=0.002,
+            )
+            self._serial.reset_input_buffer()
+        except (serial.SerialException, OSError) as exc:
+            self._serial = None
+            raise ServoBusError(f"Could not open servo bus on {self.device}: {exc}") from exc
 
     def close(self) -> None:
         if self._serial and self._serial.is_open:
-            self._serial.close()
+            try:
+                self._serial.close()
+            except (serial.SerialException, OSError) as exc:
+                raise ServoBusError(f"Could not close servo bus on {self.device}: {exc}") from exc
         self._serial = None
 
     def __enter__(self) -> "Sts3215Bus":
@@ -164,8 +171,11 @@ class Sts3215Bus:
 
     def _write_and_read(self, packet: bytes, expected_id: int | None) -> tuple[int, int, bytes]:
         port = self._require_port()
-        port.reset_input_buffer()
-        port.write(packet)
+        try:
+            port.reset_input_buffer()
+            port.write(packet)
+        except (serial.SerialException, OSError) as exc:
+            raise ServoBusError(f"Servo bus write failed on {self.device}: {exc}") from exc
         if expected_id is None:
             return BROADCAST_ID, 0, b""
         return self._read_status_packet(expected_id)
@@ -176,7 +186,10 @@ class Sts3215Bus:
         buffer = bytearray()
 
         while time.monotonic() < deadline:
-            chunk = port.read(64)
+            try:
+                chunk = port.read(64)
+            except (serial.SerialException, OSError) as exc:
+                raise ServoBusError(f"Servo bus read failed on {self.device}: {exc}") from exc
             if chunk:
                 buffer.extend(chunk)
 

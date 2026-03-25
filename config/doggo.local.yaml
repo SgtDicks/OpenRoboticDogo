@@ -77,12 +77,12 @@ legs:
       direction: 1
       neutral_ticks: 2048
       min_ticks: 1024
-      max_ticks: 3072
+      max_ticks: 3353
     foot:
       id: 12
       direction: 1
       neutral_ticks: 2048
-      min_ticks: 781
+      min_ticks: 664
       max_ticks: 3072
   front_right:
     hip_x:
@@ -144,21 +144,21 @@ legs:
 
 stand_pose:
   front_left:
-    hip_x: 2022
-    knee_y: 2652
-    foot: 781
+    hip_x: 2024
+    knee_y: 3353
+    foot: 664
   front_right:
-    hip_x: 2050
-    knee_y: 1962
-    foot: 2360
+    hip_x: 2048
+    knee_y: 1171
+    foot: 2549
   rear_left:
-    hip_x: 2180
-    knee_y: 1467
-    foot: 2123
+    hip_x: 2183
+    knee_y: 874
+    foot: 2783
   rear_right:
-    hip_x: 1837
-    knee_y: 2203
-    foot: 2408
+    hip_x: 1826
+    knee_y: 2866
+    foot: 1847
 
 storage_pose:
   front_left:
@@ -232,6 +232,24 @@ sit_to_stand_mid_pose:
     knee_y: 908
     foot: 3282
 
+sit_to_stand_front_prep_pose:
+  front_left:
+    hip_x: 2096
+    knee_y: 2609
+    foot: 1384
+  front_right:
+    hip_x: 1985
+    knee_y: 1970
+    foot: 1704
+  rear_left:
+    hip_x: 2102
+    knee_y: 2572
+    foot: 1351
+  rear_right:
+    hip_x: 1922
+    knee_y: 1199
+    foot: 3035
+
 sit_to_stand_mid_test_2_pose:
   front_left:
     hip_x: 2096
@@ -269,6 +287,7 @@ max_pose:
     foot: 3041
 
 sit_to_stand_mid_pause_ms: 500
+sit_to_stand_front_prep_pause_ms: 500
 
 stand_sequence:
   - servo_id: 2

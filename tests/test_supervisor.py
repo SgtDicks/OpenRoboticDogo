@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, call, patch
 
 from doggo.config import StandSequenceStep, load_config
 from doggo.control.supervisor import ControlSupervisor
-from doggo.models import TeleopAxes, TeleopCommand
+from doggo.models import MotionRecording, TeleopAxes, TeleopCommand
 
 
 def test_order_by_sequence_prioritizes_requested_servos() -> None:
@@ -143,11 +143,11 @@ def test_sit_moves_rear_legs_first_then_front_legs() -> None:
     sleep_mock.assert_awaited_once_with(0.5)
 
 
-def test_stand_from_sit_uses_sync_move_for_full_body_transition(tmp_path: Path) -> None:
+def test_full_body_stand_uses_test_2_midpoint_before_stand(tmp_path: Path) -> None:
     config = load_config(Path("config/doggo.example.yaml"))
-    midpoint_value = 1900
+    midpoint_value = 1777
     for leg_name in ("front_left", "front_right", "rear_left", "rear_right"):
-        midpoint_pose = getattr(config.sit_to_stand_mid_pose, leg_name)  # type: ignore[arg-type]
+        midpoint_pose = getattr(config.sit_to_stand_mid_test_2_pose, leg_name)  # type: ignore[arg-type]
         midpoint_pose.hip_x = midpoint_value
         midpoint_pose.knee_y = midpoint_value
         midpoint_pose.foot = midpoint_value
@@ -159,6 +159,75 @@ def test_stand_from_sit_uses_sync_move_for_full_body_transition(tmp_path: Path) 
 
         def read_present_position(self, servo_id: int) -> int:
             return 0
+
+        def set_torque_enabled(self, servo_id: int, enabled: bool) -> None:
+            self.torque_calls.append((servo_id, enabled))
+
+        def sync_move(
+            self,
+            commands: list[tuple[int, int]],
+            *,
+            speed: int,
+            acceleration: int,
+        ) -> None:
+            self.sync_calls.append(
+                {
+                    "commands": list(commands),
+                    "speed": speed,
+                    "acceleration": acceleration,
+                }
+            )
+
+    runtime_state_path = tmp_path / "doggo.state.json"
+    fake_bus = FakeBus()
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=fake_bus,  # type: ignore[arg-type]
+        runtime_state_path=runtime_state_path,
+    )
+    supervisor._record_pose_command("stand")
+
+    async def fail_run_ordered_pose(*args, **kwargs) -> None:
+        raise AssertionError("full-body stand should use the main sync stand sequence, not ordered sequencing")
+
+    supervisor._run_ordered_pose = fail_run_ordered_pose  # type: ignore[method-assign]
+    sleep_mock = AsyncMock()
+    with patch("doggo.control.supervisor.asyncio.sleep", sleep_mock):
+        asyncio.run(supervisor.stand())
+
+    assert fake_bus.torque_calls == (
+        [(servo_id, True) for servo_id in range(7, 13)]
+        + [(servo_id, True) for servo_id in range(1, 13)]
+    )
+    assert fake_bus.sync_calls == [
+        {
+            "commands": [(servo_id, midpoint_value) for servo_id in range(7, 13)],
+            "speed": 700,
+            "acceleration": 10,
+        },
+        {
+            "commands": [(servo_id, 2048) for servo_id in range(1, 13)],
+            "speed": 700,
+            "acceleration": 10,
+        }
+    ]
+    sleep_mock.assert_awaited_once_with(1.0)
+
+
+def test_stand_from_sit_moves_front_knees_forward_before_main_sequence(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+    config.sit_to_stand_front_prep_pause_ms = 500
+    midpoint_value = 1777
+    for leg_name in ("front_left", "front_right", "rear_left", "rear_right"):
+        midpoint_pose = getattr(config.sit_to_stand_mid_test_2_pose, leg_name)  # type: ignore[arg-type]
+        midpoint_pose.hip_x = midpoint_value
+        midpoint_pose.knee_y = midpoint_value
+        midpoint_pose.foot = midpoint_value
+
+    class FakeBus:
+        def __init__(self) -> None:
+            self.torque_calls: list[tuple[int, bool]] = []
+            self.sync_calls: list[dict[str, object]] = []
 
         def set_torque_enabled(self, servo_id: int, enabled: bool) -> None:
             self.torque_calls.append((servo_id, enabled))
@@ -193,18 +262,31 @@ def test_stand_from_sit_uses_sync_move_for_full_body_transition(tmp_path: Path) 
         runtime_state_path=runtime_state_path,
     )
 
-    async def fail_run_ordered_pose(*args, **kwargs) -> None:
-        raise AssertionError("sit -> stand should use sync_move, not ordered sequencing")
-
-    supervisor._run_ordered_pose = fail_run_ordered_pose  # type: ignore[method-assign]
     sleep_mock = AsyncMock()
     with patch("doggo.control.supervisor.asyncio.sleep", sleep_mock):
         asyncio.run(supervisor.stand())
 
-    assert fake_bus.torque_calls == ([(servo_id, True) for servo_id in range(1, 13)] * 2)
     assert fake_bus.sync_calls == [
         {
-            "commands": [(servo_id, midpoint_value) for servo_id in range(1, 13)],
+            "commands": [
+                (1, 2048),
+                (2, 2148),
+                (3, 2048),
+                (4, 2048),
+                (5, 2148),
+                (6, 2048),
+                (7, 2048),
+                (8, 2048),
+                (9, 2048),
+                (10, 2048),
+                (11, 2048),
+                (12, 2048),
+            ],
+            "speed": 700,
+            "acceleration": 10,
+        },
+        {
+            "commands": [(servo_id, midpoint_value) for servo_id in range(7, 13)],
             "speed": 700,
             "acceleration": 10,
         },
@@ -212,9 +294,9 @@ def test_stand_from_sit_uses_sync_move_for_full_body_transition(tmp_path: Path) 
             "commands": [(servo_id, 2048) for servo_id in range(1, 13)],
             "speed": 700,
             "acceleration": 10,
-        }
+        },
     ]
-    sleep_mock.assert_awaited_once_with(0.5)
+    assert sleep_mock.await_args_list == [call(0.5), call(1.0)]
 
 
 def test_sit_from_stand_uses_midpoint_before_sit_transition(tmp_path: Path) -> None:
@@ -376,6 +458,31 @@ def test_stand_test_2_uses_test_2_midpoint_before_stand(tmp_path: Path) -> None:
     sleep_mock.assert_awaited_once_with(1.0)
 
 
+def test_stand_test_2_matches_main_stand_sequence(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+    runtime_state_path = tmp_path / "doggo.state.json"
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=object(),  # type: ignore[arg-type]
+        runtime_state_path=runtime_state_path,
+    )
+    captured_calls: list[tuple[int, int]] = []
+
+    async def fake_main_stand_sequence(
+        *,
+        speed: int,
+        acceleration: int,
+    ) -> None:
+        captured_calls.append((speed, acceleration))
+
+    supervisor._run_main_stand_sequence = fake_main_stand_sequence  # type: ignore[method-assign]
+
+    asyncio.run(supervisor.stand_test_2())
+
+    assert captured_calls == [(config.motion.stand_speed, config.motion.stand_acceleration)]
+    assert supervisor._last_command_pose == "stand"
+
+
 def test_apply_teleop_runs_walk_frame_when_robot_is_standing(tmp_path: Path) -> None:
     config = load_config(Path("config/doggo.example.yaml"))
     runtime_state_path = tmp_path / "doggo.state.json"
@@ -504,3 +611,312 @@ def test_apply_teleop_blocks_walking_when_robot_is_sitting(tmp_path: Path) -> No
     assert supervisor.state == "teleop_blocked"
     assert "Move to stand first" in supervisor.last_message
     assert status["state"] == "teleop_blocked"
+
+
+def test_record_motion_captures_frames_and_persists_recording(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+
+    class FakeBus:
+        def __init__(self) -> None:
+            self._tick = 0
+
+        def read_present_position(self, servo_id: int) -> int:
+            self._tick += 1
+            return (servo_id * 100) + self._tick
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=tmp_path / "doggo.state.json",
+    )
+
+    monotonic_values = [0.0, 0.0, 0.02, 0.10, 0.12, 0.20, 0.22]
+
+    def fake_monotonic() -> float:
+        return monotonic_values.pop(0) if monotonic_values else 0.22
+
+    sleep_mock = AsyncMock()
+    with patch.object(supervisor, "_monotonic", side_effect=fake_monotonic):
+        with patch("doggo.control.supervisor.asyncio.sleep", sleep_mock):
+            recording = asyncio.run(
+                supervisor.record_motion(
+                    name="test_clip",
+                    duration_ms=200,
+                    sample_ms=100,
+                )
+            )
+
+    assert recording.name == "test_clip"
+    assert recording.frame_count == 2
+    assert recording.duration_ms == 120
+    assert recording.frames[0].timestamp_ms == 0
+    assert recording.frames[1].timestamp_ms == 120
+    assert recording.frames[0].positions[1] != recording.frames[1].positions[1]
+    assert supervisor.recording_snapshot()["available"] is True
+    assert supervisor.recording_path.exists()
+    assert sleep_mock.await_count in {0, 1}
+
+
+def test_playback_recording_replays_frames_with_original_timing(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+
+    class FakeBus:
+        def __init__(self) -> None:
+            self.torque_calls: list[tuple[int, bool]] = []
+            self.sync_calls: list[dict[str, object]] = []
+            self.positions = {servo_id: 2048 for servo_id in range(1, 13)}
+            self.positions[1] = 1200
+            self.positions[2] = 2200
+
+        def read_present_position(self, servo_id: int) -> int:
+            return self.positions[servo_id]
+
+        def set_torque_enabled(self, servo_id: int, enabled: bool) -> None:
+            self.torque_calls.append((servo_id, enabled))
+
+        def sync_move(
+            self,
+            commands: list[tuple[int, int]],
+            *,
+            speed: int,
+            acceleration: int,
+        ) -> None:
+            self.sync_calls.append(
+                {
+                    "commands": list(commands),
+                    "speed": speed,
+                    "acceleration": acceleration,
+                }
+            )
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=tmp_path / "doggo.state.json",
+    )
+    supervisor.last_recording = MotionRecording.model_validate(
+        {
+            "name": "test_clip",
+            "duration_ms": 150,
+            "sample_ms": 100,
+            "servo_ids": [1, 2],
+            "frames": [
+                {"timestamp_ms": 0, "positions": {1: 1200, 2: 2200}},
+                {"timestamp_ms": 150, "positions": {1: 1300, 2: 2300}},
+            ],
+        }
+    )
+
+    sleep_mock = AsyncMock()
+    with patch("doggo.control.supervisor.asyncio.sleep", sleep_mock):
+        recording = asyncio.run(supervisor.playback_recording(speed=900, acceleration=6))
+
+    assert recording.name == "test_clip"
+    assert supervisor.state == "playback_complete"
+    assert supervisor.last_message == "Played back 2 frame(s) from test_clip."
+    assert supervisor.servo_bus.sync_calls == [  # type: ignore[union-attr]
+        {
+            "commands": [(1, 1200), (2, 2200)],
+            "speed": 900,
+            "acceleration": 6,
+        },
+        {
+            "commands": [(1, 1300), (2, 2300)],
+            "speed": 900,
+            "acceleration": 6,
+        },
+    ]
+    sleep_mock.assert_awaited_once_with(0.15)
+
+
+def test_playback_recording_uses_recorded_timing_to_derive_speed(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+
+    class FakeBus:
+        def __init__(self) -> None:
+            self.torque_calls: list[tuple[int, bool]] = []
+            self.sync_calls: list[dict[str, object]] = []
+            self.positions = {servo_id: 2048 for servo_id in range(1, 13)}
+            self.positions[1] = 1000
+            self.positions[2] = 2000
+
+        def read_present_position(self, servo_id: int) -> int:
+            return self.positions[servo_id]
+
+        def set_torque_enabled(self, servo_id: int, enabled: bool) -> None:
+            self.torque_calls.append((servo_id, enabled))
+
+        def sync_move(
+            self,
+            commands: list[tuple[int, int]],
+            *,
+            speed: int,
+            acceleration: int,
+        ) -> None:
+            self.sync_calls.append(
+                {
+                    "commands": list(commands),
+                    "speed": speed,
+                    "acceleration": acceleration,
+                }
+            )
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=tmp_path / "doggo.state.json",
+    )
+    supervisor.last_recording = MotionRecording.model_validate(
+        {
+            "name": "timed_clip",
+            "duration_ms": 200,
+            "sample_ms": 100,
+            "servo_ids": [1, 2],
+            "frames": [
+                {"timestamp_ms": 0, "positions": {1: 1200, 2: 2100}},
+                {"timestamp_ms": 200, "positions": {1: 1400, 2: 2400}},
+            ],
+        }
+    )
+
+    sleep_mock = AsyncMock()
+    with patch("doggo.control.supervisor.asyncio.sleep", sleep_mock):
+        asyncio.run(supervisor.playback_recording())
+
+    assert supervisor.servo_bus.sync_calls == [  # type: ignore[union-attr]
+        {
+            "commands": [(1, 1200), (2, 2100)],
+            "speed": config.motion.default_speed,
+            "acceleration": config.motion.default_acceleration,
+        },
+        {
+            "commands": [(1, 1400), (2, 2400)],
+            "speed": 1500,
+            "acceleration": config.motion.default_acceleration,
+        },
+    ]
+    sleep_mock.assert_awaited_once_with(0.2)
+
+
+def test_record_motion_auto_stops_after_idle_timeout(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+
+    class FakeBus:
+        def read_present_position(self, servo_id: int) -> int:
+            return 2000 + servo_id
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=tmp_path / "doggo.state.json",
+    )
+
+    monotonic_values = [0.0, 0.0, 0.05, 0.2, 0.25, 0.25, 0.75, 0.8, 0.8]
+
+    def fake_monotonic() -> float:
+        return monotonic_values.pop(0) if monotonic_values else 0.8
+
+    sleep_mock = AsyncMock()
+    with patch.object(supervisor, "_monotonic", side_effect=fake_monotonic):
+        with patch("doggo.control.supervisor.asyncio.sleep", sleep_mock):
+            recording = asyncio.run(
+                supervisor.record_motion(
+                    name="idle_clip",
+                    duration_ms=10_000,
+                    sample_ms=200,
+                    idle_stop_seconds=0.5,
+                    idle_threshold_ticks=15,
+                )
+            )
+
+    assert recording.name == "idle_clip"
+    assert recording.stop_reason == "idle"
+    assert recording.duration_ms == 600
+    assert supervisor.last_message.endswith("Stop reason: idle.")
+
+
+def test_save_recording_persists_named_clip_and_lists_it(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=None,
+        runtime_state_path=tmp_path / "doggo.state.json",
+    )
+    supervisor.last_recording = MotionRecording.model_validate(
+        {
+            "name": "last_capture",
+            "duration_ms": 250,
+            "sample_ms": 100,
+            "frames": [{"timestamp_ms": 0, "positions": {1: 1000}}],
+            "servo_ids": [1],
+            "stop_reason": "manual",
+        }
+    )
+
+    saved = supervisor.save_recording("wave_test")
+
+    assert saved.name == "wave_test"
+    assert (tmp_path / "recordings" / "wave_test.json").exists()
+    assert supervisor.list_saved_recordings()[0]["name"] == "wave_test"
+
+
+def test_playback_recording_can_load_saved_clip_by_name(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+
+    class FakeBus:
+        def __init__(self) -> None:
+            self.torque_calls: list[tuple[int, bool]] = []
+            self.sync_calls: list[dict[str, object]] = []
+            self.positions = {servo_id: 2048 for servo_id in range(1, 13)}
+
+        def read_present_position(self, servo_id: int) -> int:
+            return self.positions[servo_id]
+
+        def set_torque_enabled(self, servo_id: int, enabled: bool) -> None:
+            self.torque_calls.append((servo_id, enabled))
+
+        def sync_move(
+            self,
+            commands: list[tuple[int, int]],
+            *,
+            speed: int,
+            acceleration: int,
+        ) -> None:
+            self.sync_calls.append(
+                {
+                    "commands": list(commands),
+                    "speed": speed,
+                    "acceleration": acceleration,
+                }
+            )
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=tmp_path / "doggo.state.json",
+    )
+    saved_path = tmp_path / "recordings" / "saved_wave.json"
+    saved_path.parent.mkdir(parents=True, exist_ok=True)
+    saved_path.write_text(
+        MotionRecording.model_validate(
+            {
+                "name": "saved_wave",
+                "duration_ms": 100,
+                "sample_ms": 100,
+                "servo_ids": [1],
+                "stop_reason": "duration",
+                "frames": [
+                    {"timestamp_ms": 0, "positions": {1: 1500}},
+                    {"timestamp_ms": 100, "positions": {1: 1700}},
+                ],
+            }
+        ).model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+    sleep_mock = AsyncMock()
+    with patch("doggo.control.supervisor.asyncio.sleep", sleep_mock):
+        recording = asyncio.run(supervisor.playback_recording(name="saved_wave"))
+
+    assert recording.name == "saved_wave"
+    assert supervisor.servo_bus.sync_calls[-1]["commands"] == [(1, 1700)]  # type: ignore[union-attr]

@@ -64,6 +64,41 @@
                 <button id="pose-relax" type="button" class="button danger">Relax</button>
               </div>
             </div>
+
+            <div class="action-block">
+              <h3>Motion Capture</h3>
+              <div class="recording-grid">
+                <label class="field">
+                  <span>Clip Name</span>
+                  <input id="motion-name" type="text" value="last_capture" />
+                </label>
+                <label class="field">
+                  <span>Record Seconds</span>
+                  <input id="motion-duration-seconds" type="number" min="1" max="300" step="1" value="10" />
+                </label>
+                <label class="field">
+                  <span>Idle Auto-Stop (sec)</span>
+                  <input id="motion-idle-seconds" type="number" min="0" max="600" step="0.5" value="0" />
+                </label>
+              </div>
+              <div class="button-grid">
+                <button id="motion-record" type="button" class="button">Record</button>
+                <button id="motion-stop" type="button" class="button ghost">Stop</button>
+                <button id="motion-playback" type="button" class="button ghost">Play Last</button>
+                <button id="motion-save" type="button" class="button ghost">Save Last As</button>
+              </div>
+              <div class="recording-grid secondary">
+                <label class="field">
+                  <span>Saved Clips</span>
+                  <select id="saved-recordings"></select>
+                </label>
+                <div class="field actions">
+                  <span>Saved Clip Actions</span>
+                  <button id="motion-playback-saved" type="button" class="button ghost">Play Saved</button>
+                </div>
+              </div>
+              <p id="recording-summary" class="recording-summary">No recording saved yet.</p>
+            </div>
           </div>
 
           <div class="axis-grid">
