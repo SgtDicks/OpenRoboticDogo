@@ -62,7 +62,4 @@ logs/
 config.local.py
 .codex_tmp/
 *.state.json
-*.state.recording.json
 *_state.json
-recordings/
-config/recordings/
