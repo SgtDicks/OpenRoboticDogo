@@ -1,0 +1,1980 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doggo Three-Camera Coverage Viewer</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg-1: #f8f3ea;
+        --bg-2: #ebe0cf;
+        --panel: rgba(255, 252, 247, 0.94);
+        --ink: #1f2421;
+        --muted: #5a645b;
+        --line: rgba(31, 36, 33, 0.12);
+        --accent: #c45b29;
+        --accent-2: #2f6f69;
+        --left-color: #c45b29;
+        --forward-color: #2f6f69;
+        --right-color: #3e6aa8;
+        --shadow: 0 18px 50px rgba(62, 49, 35, 0.11);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(196, 91, 41, 0.18), transparent 28%),
+          radial-gradient(circle at top right, rgba(47, 111, 105, 0.14), transparent 26%),
+          linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 100%);
+      }
+
+      main {
+        width: min(1380px, calc(100vw - 32px));
+        margin: 24px auto 48px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero {
+        padding: 24px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        letter-spacing: -0.03em;
+      }
+
+      h1 {
+        font-size: clamp(2.2rem, 3.4vw, 3.25rem);
+        line-height: 0.95;
+        margin-bottom: 8px;
+      }
+
+      h2 {
+        font-size: 1.1rem;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 74ch;
+      }
+
+      .role-grid {
+        padding: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+
+      .role-card {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.68);
+        padding: 18px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .role-card[data-role="left"] {
+        box-shadow: inset 0 0 0 1px rgba(196, 91, 41, 0.12);
+      }
+
+      .role-card[data-role="forward"] {
+        box-shadow: inset 0 0 0 1px rgba(47, 111, 105, 0.12);
+      }
+
+      .role-card[data-role="right"] {
+        box-shadow: inset 0 0 0 1px rgba(62, 106, 168, 0.12);
+      }
+
+      .role-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+      }
+
+      .swatch.left {
+        background: var(--left-color);
+      }
+
+      .swatch.forward {
+        background: var(--forward-color);
+      }
+
+      .swatch.right {
+        background: var(--right-color);
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        font-size: 0.92rem;
+        color: var(--muted);
+      }
+
+      select,
+      input,
+      button {
+        font: inherit;
+      }
+
+      select,
+      input[type="range"] {
+        width: 100%;
+      }
+
+      select,
+      button {
+        min-height: 44px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        padding: 0 12px;
+        background: rgba(255, 255, 255, 0.8);
+        color: var(--ink);
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 700;
+        border: 0;
+      }
+
+      .button-primary {
+        background: linear-gradient(135deg, var(--accent), #d27d34);
+        color: white;
+      }
+
+      .button-secondary {
+        background: linear-gradient(135deg, var(--accent-2), #548f7c);
+        color: white;
+      }
+
+      .button-row {
+        display: grid;
+        gap: 10px;
+      }
+
+      .value-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+
+      .status {
+        padding: 0 24px 24px;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .status strong {
+        color: var(--ink);
+      }
+
+      .calibration-status {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .calibration-status strong {
+        color: var(--ink);
+      }
+
+      .viewer-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.95fr;
+        gap: 18px;
+      }
+
+      .viewer,
+      .previews,
+      .coverage {
+        padding: 18px;
+      }
+
+      .viewer-toolbar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .viewer-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 12px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .viewer-meta strong {
+        color: var(--ink);
+      }
+
+      .stage {
+        --stage-ratio: 16 / 9;
+        position: relative;
+        width: 100%;
+        aspect-ratio: var(--stage-ratio);
+        overflow: hidden;
+        border-radius: 18px;
+        background:
+          linear-gradient(135deg, rgba(16, 19, 20, 1) 0%, rgba(26, 30, 31, 1) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .stage video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
+        object-position: top left;
+        background: #111;
+        transform-origin: 0 0;
+      }
+
+      .stage canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #111;
+      }
+
+      #overlayLayer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        transform-origin: 0 0;
+        mix-blend-mode: screen;
+      }
+
+      #overlayStage {
+        opacity: 0.5;
+        transform: translate3d(0px, 0px, 0) scale(1);
+        transform-origin: center center;
+      }
+
+      .range-grid {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+
+      .tips {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .tips strong {
+        color: var(--ink);
+      }
+
+      .viewer-divider {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+
+      .panorama-range-grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+
+      .preview-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .preview-card {
+        display: grid;
+        gap: 10px;
+      }
+
+      .preview-card video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: contain;
+        object-position: center;
+        border-radius: 16px;
+        background: #111;
+      }
+
+      .preview-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .preview-meta strong {
+        color: var(--ink);
+      }
+
+      .coverage-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+
+      .coverage-pill {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(47, 111, 105, 0.12);
+        color: var(--accent-2);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .summary-card {
+        padding: 14px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .summary-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.88rem;
+        margin-bottom: 6px;
+      }
+
+      .summary-card strong {
+        font-size: 1.35rem;
+      }
+
+      .coverage-axis {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .coverage-lanes {
+        display: grid;
+        gap: 12px;
+      }
+
+      .coverage-lane {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .lane-label {
+        font-weight: 700;
+      }
+
+      .lane-track {
+        position: relative;
+        height: 26px;
+        border-radius: 999px;
+        background:
+          linear-gradient(
+            to right,
+            rgba(31, 36, 33, 0.06) 0%,
+            rgba(31, 36, 33, 0.06) 49.6%,
+            rgba(31, 36, 33, 0.16) 49.6%,
+            rgba(31, 36, 33, 0.16) 50.4%,
+            rgba(31, 36, 33, 0.06) 50.4%,
+            rgba(31, 36, 33, 0.06) 100%
+          );
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+
+      .lane-segment {
+        position: absolute;
+        top: 3px;
+        bottom: 3px;
+        border-radius: 999px;
+      }
+
+      .lane-segment.left {
+        background: rgba(196, 91, 41, 0.85);
+      }
+
+      .lane-segment.forward {
+        background: rgba(47, 111, 105, 0.85);
+      }
+
+      .lane-segment.right {
+        background: rgba(62, 106, 168, 0.85);
+      }
+
+      .coverage-note {
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      @media (max-width: 980px) {
+        .viewer-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel hero">
+        <h1>Doggo Three-Camera Coverage Viewer</h1>
+        <p>
+          Model a left, forward, and right camera together. The live previews help you confirm device order, the overlay
+          stage lets you compare any pair, the stitched panorama turns those feeds into one wide combined view, and the
+          coverage panel shows whether your mount angles keep the 90 degree FOV contiguous with enough overlap.
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="role-grid">
+          <article class="role-card" data-role="left">
+            <div class="role-title">
+              <span class="swatch left"></span>
+              <h2>Left Camera</h2>
+            </div>
+            <label>
+              Device
+              <select id="leftCamera"></select>
+            </label>
+            <label>
+              Friendly name
+              <input id="leftAlias" type="text" placeholder="Left camera" />
+            </label>
+            <label>
+              Yaw angle
+              <input id="leftYaw" type="range" min="-90" max="0" step="1" value="-35" />
+              <span class="value-line">
+                <span>Mount angle</span>
+                <span id="leftYawValue">-35 deg</span>
+              </span>
+            </label>
+          </article>
+
+          <article class="role-card" data-role="forward">
+            <div class="role-title">
+              <span class="swatch forward"></span>
+              <h2>Forward Camera</h2>
+            </div>
+            <label>
+              Device
+              <select id="forwardCamera"></select>
+            </label>
+            <label>
+              Friendly name
+              <input id="forwardAlias" type="text" placeholder="Forward camera" />
+            </label>
+            <label>
+              Yaw angle
+              <input id="forwardYaw" type="range" min="-45" max="45" step="1" value="0" />
+              <span class="value-line">
+                <span>Mount angle</span>
+                <span id="forwardYawValue">0 deg</span>
+              </span>
+            </label>
+          </article>
+
+          <article class="role-card" data-role="right">
+            <div class="role-title">
+              <span class="swatch right"></span>
+              <h2>Right Camera</h2>
+            </div>
+            <label>
+              Device
+              <select id="rightCamera"></select>
+            </label>
+            <label>
+              Friendly name
+              <input id="rightAlias" type="text" placeholder="Right camera" />
+            </label>
+            <label>
+              Yaw angle
+              <input id="rightYaw" type="range" min="0" max="90" step="1" value="35" />
+              <span class="value-line">
+                <span>Mount angle</span>
+                <span id="rightYawValue">35 deg</span>
+              </span>
+            </label>
+          </article>
+
+          <article class="role-card">
+            <div class="role-title">
+              <span class="swatch forward"></span>
+              <h2>Mount Model</h2>
+            </div>
+            <label>
+              Shared horizontal FOV
+              <input id="sharedFov" type="range" min="50" max="140" step="1" value="90" />
+              <span class="value-line">
+                <span>Lens width</span>
+                <span id="sharedFovValue">90 deg</span>
+              </span>
+            </label>
+            <div class="button-row">
+              <button id="startButton" class="button-primary" type="button">Start Cameras</button>
+              <button id="refreshButton" class="button-secondary" type="button">Refresh Devices</button>
+              <button id="loadCalibrationButton" class="button-secondary" type="button">Load Calibration</button>
+              <button id="openCaptureButton" class="button-secondary" type="button">Capture Checkerboard</button>
+            </div>
+            <div class="calibration-status" id="calibrationStatus">
+              Calibration: no saved checkerboard homography loaded yet.
+            </div>
+            <div class="calibration-status">
+              Friendly names and device choices are stored in this browser.
+            </div>
+          </article>
+        </div>
+        <div class="status" id="status">
+          Waiting for camera access. Start the cameras, then adjust the yaw angles to see how the three FOVs overlap.
+        </div>
+      </section>
+
+      <section class="viewer-grid">
+        <section class="panel viewer">
+          <div class="viewer-toolbar">
+            <label>
+              Base view
+              <select id="baseRole">
+                <option value="forward">Forward</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+            <label>
+              Overlay view
+              <select id="overlayRole">
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="forward">Forward</option>
+              </select>
+            </label>
+            <label>
+              Blend mode
+              <select id="blendMode">
+                <option value="screen">Screen</option>
+                <option value="difference">Difference</option>
+                <option value="normal">Normal</option>
+                <option value="multiply">Multiply</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="viewer-meta">
+            <strong id="baseStageLabel">Base: Forward camera</strong>
+            <span id="overlayStageLabel">Overlay: Left camera</span>
+          </div>
+          <div class="calibration-status" id="calibrationStageStatus">
+            Calibration warp inactive. Manual overlay controls are available below.
+          </div>
+
+          <div class="stage" id="stage">
+            <video id="baseStage" autoplay playsinline muted></video>
+            <div id="overlayLayer">
+              <video id="overlayStage" autoplay playsinline muted></video>
+            </div>
+          </div>
+
+          <div class="range-grid">
+            <label>
+              Overlay opacity
+              <input id="opacity" type="range" min="0" max="100" value="50" />
+              <span class="value-line">
+                <span>Opacity</span>
+                <span id="opacityValue">50%</span>
+              </span>
+            </label>
+            <label>
+              Overlay X offset
+              <input id="offsetX" type="range" min="-400" max="400" value="0" />
+              <span class="value-line">
+                <span>Horizontal shift</span>
+                <span id="offsetXValue">0px</span>
+              </span>
+            </label>
+            <label>
+              Overlay Y offset
+              <input id="offsetY" type="range" min="-300" max="300" value="0" />
+              <span class="value-line">
+                <span>Vertical shift</span>
+                <span id="offsetYValue">0px</span>
+              </span>
+            </label>
+            <label>
+              Overlay scale
+              <input id="scale" type="range" min="60" max="160" value="100" />
+              <span class="value-line">
+                <span>Scale</span>
+                <span id="scaleValue">1.00x</span>
+              </span>
+            </label>
+          </div>
+
+          <div class="tips">
+            <strong>Tip:</strong> compare <strong>Left over Forward</strong> and <strong>Right over Forward</strong> first. Use
+            <strong>Difference</strong> blend mode to line up shared features, then switch back to <strong>Screen</strong> once
+            you are happy with the overlap.
+          </div>
+
+          <div class="viewer-divider">
+            <div class="viewer-meta">
+              <strong>Stitched panorama</strong>
+              <span id="panoramaGeometry">No stitched view yet</span>
+            </div>
+            <div class="calibration-status" id="panoramaStatus">
+              Start the cameras to build one combined left, forward, and right view. This panorama uses the yaw and FOV
+              model for full-width stitching, while the overlay stage keeps using checkerboard calibration for pairwise alignment.
+            </div>
+
+            <div class="stage" id="panoramaFrame">
+              <canvas id="panoramaCanvas"></canvas>
+            </div>
+
+            <div class="panorama-range-grid">
+              <label>
+                Seam feather
+                <input id="panoramaFeather" type="range" min="0" max="100" value="70" />
+                <span class="value-line">
+                  <span>Blend width</span>
+                  <span id="panoramaFeatherValue">70%</span>
+                </span>
+              </label>
+              <label>
+                Left vertical trim
+                <input id="panoramaLeftTrim" type="range" min="-160" max="160" value="0" />
+                <span class="value-line">
+                  <span>Lift</span>
+                  <span id="panoramaLeftTrimValue">0px</span>
+                </span>
+              </label>
+              <label>
+                Right vertical trim
+                <input id="panoramaRightTrim" type="range" min="-160" max="160" value="0" />
+                <span class="value-line">
+                  <span>Lift</span>
+                  <span id="panoramaRightTrimValue">0px</span>
+                </span>
+              </label>
+            </div>
+
+            <div class="tips">
+              <strong>Tip:</strong> this stitched view maps each camera into one shared horizontal panorama using the current
+              yaw angles and shared FOV. If the horizon looks a little high or low on one side, use the vertical trim sliders
+              to settle it.
+            </div>
+          </div>
+        </section>
+
+        <section class="panel previews">
+          <div class="preview-list">
+            <article class="preview-card">
+              <div class="preview-meta">
+                <strong>Left preview</strong>
+                <span id="leftLabel">Not started</span>
+              </div>
+              <video id="leftPreview" autoplay playsinline muted></video>
+            </article>
+
+            <article class="preview-card">
+              <div class="preview-meta">
+                <strong>Forward preview</strong>
+                <span id="forwardLabel">Not started</span>
+              </div>
+              <video id="forwardPreview" autoplay playsinline muted></video>
+            </article>
+
+            <article class="preview-card">
+              <div class="preview-meta">
+                <strong>Right preview</strong>
+                <span id="rightLabel">Not started</span>
+              </div>
+              <video id="rightPreview" autoplay playsinline muted></video>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel coverage">
+        <div class="coverage-header">
+          <div>
+            <h2>Coverage Model</h2>
+            <p>
+              Angles are horizontal yaw relative to straight ahead. The bars below show the predicted coverage sectors for
+              the current mount angles and the shared FOV slider.
+            </p>
+          </div>
+          <div class="coverage-pill" id="coverageState">Contiguous coverage</div>
+        </div>
+
+        <div class="summary-grid">
+          <article class="summary-card">
+            <span>Total union</span>
+            <strong id="totalCoverage">0 deg</strong>
+          </article>
+          <article class="summary-card">
+            <span>Left and Forward</span>
+            <strong id="leftForwardOverlap">0 deg</strong>
+          </article>
+          <article class="summary-card">
+            <span>Forward and Right</span>
+            <strong id="forwardRightOverlap">0 deg</strong>
+          </article>
+          <article class="summary-card">
+            <span>Left and Right</span>
+            <strong id="leftRightOverlap">0 deg</strong>
+          </article>
+          <article class="summary-card">
+            <span>Largest internal gap</span>
+            <strong id="largestGap">0 deg</strong>
+          </article>
+          <article class="summary-card">
+            <span>Coverage sectors</span>
+            <strong id="sectorCount">1</strong>
+          </article>
+        </div>
+
+        <div class="coverage-axis">
+          <span>-180 deg</span>
+          <span>-90 deg</span>
+          <span>0 deg</span>
+          <span>90 deg</span>
+          <span>180 deg</span>
+        </div>
+
+        <div class="coverage-lanes">
+          <div class="coverage-lane">
+            <span class="lane-label">Left</span>
+            <div class="lane-track" id="leftLane"></div>
+          </div>
+          <div class="coverage-lane">
+            <span class="lane-label">Forward</span>
+            <div class="lane-track" id="forwardLane"></div>
+          </div>
+          <div class="coverage-lane">
+            <span class="lane-label">Right</span>
+            <div class="lane-track" id="rightLane"></div>
+          </div>
+        </div>
+
+        <div class="coverage-note" id="coverageNote">
+          With a 90 degree lens at -35, 0, and +35 degrees, the three cameras form a single 160 degree coverage span with
+          overlap between every pair.
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const ROLE_PREFERENCES_KEY = "doggo-camera-role-preferences-v1";
+      const TARGET_STREAM_WIDTH = 1280;
+      const TARGET_STREAM_HEIGHT = 720;
+      const ROLE_ORDER = ["left", "forward", "right"];
+      const ROLE_LABELS = {
+        left: "Left",
+        forward: "Forward",
+        right: "Right",
+      };
+      const PREFERRED_DEVICE_INDEX = {
+        left: 1,
+        forward: 0,
+        right: 2,
+      };
+
+      const roles = {
+        left: {
+          cameraSelect: document.getElementById("leftCamera"),
+          aliasInput: document.getElementById("leftAlias"),
+          yawInput: document.getElementById("leftYaw"),
+          yawValue: document.getElementById("leftYawValue"),
+          preview: document.getElementById("leftPreview"),
+          label: document.getElementById("leftLabel"),
+          lane: document.getElementById("leftLane"),
+        },
+        forward: {
+          cameraSelect: document.getElementById("forwardCamera"),
+          aliasInput: document.getElementById("forwardAlias"),
+          yawInput: document.getElementById("forwardYaw"),
+          yawValue: document.getElementById("forwardYawValue"),
+          preview: document.getElementById("forwardPreview"),
+          label: document.getElementById("forwardLabel"),
+          lane: document.getElementById("forwardLane"),
+        },
+        right: {
+          cameraSelect: document.getElementById("rightCamera"),
+          aliasInput: document.getElementById("rightAlias"),
+          yawInput: document.getElementById("rightYaw"),
+          yawValue: document.getElementById("rightYawValue"),
+          preview: document.getElementById("rightPreview"),
+          label: document.getElementById("rightLabel"),
+          lane: document.getElementById("rightLane"),
+        },
+      };
+
+      const sharedFov = document.getElementById("sharedFov");
+      const sharedFovValue = document.getElementById("sharedFovValue");
+      const startButton = document.getElementById("startButton");
+      const refreshButton = document.getElementById("refreshButton");
+      const loadCalibrationButton = document.getElementById("loadCalibrationButton");
+      const openCaptureButton = document.getElementById("openCaptureButton");
+      const status = document.getElementById("status");
+      const calibrationStatus = document.getElementById("calibrationStatus");
+
+      const baseRole = document.getElementById("baseRole");
+      const overlayRole = document.getElementById("overlayRole");
+      const blendMode = document.getElementById("blendMode");
+      const stage = document.getElementById("stage");
+      const baseStage = document.getElementById("baseStage");
+      const overlayLayer = document.getElementById("overlayLayer");
+      const overlayStage = document.getElementById("overlayStage");
+      const baseStageLabel = document.getElementById("baseStageLabel");
+      const overlayStageLabel = document.getElementById("overlayStageLabel");
+      const calibrationStageStatus = document.getElementById("calibrationStageStatus");
+
+      const opacity = document.getElementById("opacity");
+      const offsetX = document.getElementById("offsetX");
+      const offsetY = document.getElementById("offsetY");
+      const scale = document.getElementById("scale");
+      const opacityValue = document.getElementById("opacityValue");
+      const offsetXValue = document.getElementById("offsetXValue");
+      const offsetYValue = document.getElementById("offsetYValue");
+      const scaleValue = document.getElementById("scaleValue");
+
+      const panoramaFrame = document.getElementById("panoramaFrame");
+      const panoramaCanvas = document.getElementById("panoramaCanvas");
+      const panoramaContext = panoramaCanvas.getContext("2d");
+      const panoramaGeometry = document.getElementById("panoramaGeometry");
+      const panoramaStatus = document.getElementById("panoramaStatus");
+      const panoramaFeather = document.getElementById("panoramaFeather");
+      const panoramaFeatherValue = document.getElementById("panoramaFeatherValue");
+      const panoramaLeftTrim = document.getElementById("panoramaLeftTrim");
+      const panoramaLeftTrimValue = document.getElementById("panoramaLeftTrimValue");
+      const panoramaRightTrim = document.getElementById("panoramaRightTrim");
+      const panoramaRightTrimValue = document.getElementById("panoramaRightTrimValue");
+
+      const totalCoverage = document.getElementById("totalCoverage");
+      const leftForwardOverlap = document.getElementById("leftForwardOverlap");
+      const forwardRightOverlap = document.getElementById("forwardRightOverlap");
+      const leftRightOverlap = document.getElementById("leftRightOverlap");
+      const largestGap = document.getElementById("largestGap");
+      const sectorCount = document.getElementById("sectorCount");
+      const coverageState = document.getElementById("coverageState");
+      const coverageNote = document.getElementById("coverageNote");
+
+      let activeStreams = [];
+      let roleStreams = new Map();
+      let calibrationData = null;
+      let panoramaAnimationFrame = null;
+      const panoramaBuffers = new Map();
+
+      function setStatus(message, strong = false) {
+        status.innerHTML = strong ? `<strong>${message}</strong>` : message;
+      }
+
+      function setCalibrationStatus(message, strong = false) {
+        calibrationStatus.innerHTML = strong ? `<strong>${message}</strong>` : message;
+      }
+
+      function defaultAlias(role) {
+        return `${ROLE_LABELS[role]} camera`;
+      }
+
+      function loadStoredPreferences() {
+        try {
+          return JSON.parse(localStorage.getItem(ROLE_PREFERENCES_KEY) || "{}");
+        } catch (error) {
+          console.warn("Could not parse stored camera role preferences:", error);
+          return {};
+        }
+      }
+
+      function saveStoredPreferences() {
+        const preferences = {
+          aliases: Object.fromEntries(
+            ROLE_ORDER.map((role) => [role, roles[role].aliasInput.value.trim() || defaultAlias(role)])
+          ),
+          deviceSelections: Object.fromEntries(
+            ROLE_ORDER.map((role) => [role, roles[role].cameraSelect.value || ""])
+          ),
+        };
+        localStorage.setItem(ROLE_PREFERENCES_KEY, JSON.stringify(preferences));
+      }
+
+      function applyStoredAliases() {
+        const preferences = loadStoredPreferences();
+        for (const role of ROLE_ORDER) {
+          roles[role].aliasInput.value = preferences.aliases?.[role] || defaultAlias(role);
+        }
+      }
+
+      function roleDisplayName(role) {
+        return roles[role].aliasInput.value.trim() || defaultAlias(role);
+      }
+
+      function selectedDeviceLabel(role) {
+        return roles[role].cameraSelect.selectedOptions[0]?.textContent || "No device selected";
+      }
+
+      function formatDeviceOptionLabel(device, index) {
+        const deviceName = device.label || `Camera ${index + 1}`;
+        const shortId = device.deviceId ? device.deviceId.slice(-6) : `slot-${index + 1}`;
+        return `${deviceName} [${index + 1}] ${shortId}`;
+      }
+
+      function refreshRoleLabels() {
+        for (const role of ROLE_ORDER) {
+          const stream = roleStreams.get(role);
+          if (stream) {
+            roles[role].label.textContent =
+              `${roleDisplayName(role)} - ${selectedDeviceLabel(role)} - ${describeStream(stream)}`;
+          } else {
+            roles[role].label.textContent = `${roleDisplayName(role)} - not started`;
+          }
+        }
+      }
+
+      function identityMatrix3() {
+        return [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ];
+      }
+
+      function multiplyMatrix3(left, right) {
+        const product = identityMatrix3();
+        for (let row = 0; row < 3; row += 1) {
+          for (let column = 0; column < 3; column += 1) {
+            let total = 0;
+            for (let index = 0; index < 3; index += 1) {
+              total += left[row][index] * right[index][column];
+            }
+            product[row][column] = total;
+          }
+        }
+        return product;
+      }
+
+      function invertMatrix3(matrix) {
+        const [
+          [a, b, c],
+          [d, e, f],
+          [g, h, i],
+        ] = matrix;
+
+        const A = e * i - f * h;
+        const B = -(d * i - f * g);
+        const C = d * h - e * g;
+        const D = -(b * i - c * h);
+        const E = a * i - c * g;
+        const F = -(a * h - b * g);
+        const G = b * f - c * e;
+        const H = -(a * f - c * d);
+        const I = a * e - b * d;
+        const determinant = a * A + b * B + c * C;
+
+        if (Math.abs(determinant) < 1e-9) {
+          throw new Error("Calibration matrix is singular and cannot be inverted.");
+        }
+
+        return [
+          [A / determinant, D / determinant, G / determinant],
+          [B / determinant, E / determinant, H / determinant],
+          [C / determinant, F / determinant, I / determinant],
+        ];
+      }
+
+      function parseMatrix(matrix) {
+        return matrix.map((row) => row.map((value) => Number(value)));
+      }
+
+      function normalizeHomography(matrix) {
+        const scale = matrix[2][2];
+        if (!Number.isFinite(scale) || Math.abs(scale) < 1e-9) {
+          return matrix;
+        }
+        return matrix.map((row) => row.map((value) => value / scale));
+      }
+
+      function homographyToCssMatrix3d(matrix) {
+        return `matrix3d(${matrix[0][0]}, ${matrix[1][0]}, 0, ${matrix[2][0]}, ` +
+          `${matrix[0][1]}, ${matrix[1][1]}, 0, ${matrix[2][1]}, ` +
+          `0, 0, 1, 0, ${matrix[0][2]}, ${matrix[1][2]}, 0, ${matrix[2][2]})`;
+      }
+
+      function scaleHomographyToStage(matrix, imageSize) {
+        const rect = stage.getBoundingClientRect();
+        const width = rect.width || imageSize.width;
+        const height = rect.height || imageSize.height;
+        const scaleMatrix = [
+          [width / imageSize.width, 0, 0],
+          [0, height / imageSize.height, 0],
+          [0, 0, 1],
+        ];
+        return multiplyMatrix3(scaleMatrix, multiplyMatrix3(matrix, invertMatrix3(scaleMatrix)));
+      }
+
+      function firstCalibrationPair() {
+        if (!calibrationData || !calibrationData.pairs) {
+          return null;
+        }
+        return calibrationData.pairs.left_to_forward || calibrationData.pairs.right_to_forward || null;
+      }
+
+      function currentImageSize() {
+        const pair = firstCalibrationPair();
+        if (pair && pair.image_size) {
+          return {
+            width: Number(pair.image_size.width),
+            height: Number(pair.image_size.height),
+          };
+        }
+
+        for (const role of ROLE_ORDER) {
+          const preview = roles[role].preview;
+          if (preview.videoWidth && preview.videoHeight) {
+            return {
+              width: preview.videoWidth,
+              height: preview.videoHeight,
+            };
+          }
+        }
+
+        if (baseStage.videoWidth && baseStage.videoHeight) {
+          return {
+            width: baseStage.videoWidth,
+            height: baseStage.videoHeight,
+          };
+        }
+
+        return { width: 1280, height: 720 };
+      }
+
+      function stageImageSize() {
+        return currentImageSize();
+      }
+
+      function updateStageGeometry() {
+        const imageSize = stageImageSize();
+        stage.style.setProperty("--stage-ratio", `${imageSize.width} / ${imageSize.height}`);
+      }
+
+      function pairForRole(role) {
+        if (!calibrationData || !calibrationData.pairs) {
+          return null;
+        }
+        if (role === "left") {
+          return calibrationData.pairs.left_to_forward || null;
+        }
+        if (role === "right") {
+          return calibrationData.pairs.right_to_forward || null;
+        }
+        return null;
+      }
+
+      function roleToForwardMatrix(role) {
+        if (role === "forward") {
+          return identityMatrix3();
+        }
+        const pair = pairForRole(role);
+        if (!pair || !pair.matrix) {
+          return null;
+        }
+        return parseMatrix(pair.matrix);
+      }
+
+      function transformForPair(baseName, overlayName) {
+        const baseToForward = roleToForwardMatrix(baseName);
+        const overlayToForward = roleToForwardMatrix(overlayName);
+        if (!baseToForward || !overlayToForward) {
+          return null;
+        }
+        return multiplyMatrix3(invertMatrix3(baseToForward), overlayToForward);
+      }
+
+      function applyCalibrationTransform() {
+        updateStageGeometry();
+
+        if (!calibrationData) {
+          overlayLayer.style.transform = "none";
+          calibrationStageStatus.textContent = "Calibration warp inactive. Manual overlay controls are available below.";
+          return;
+        }
+
+        try {
+          const baseName = baseRole.value;
+          const overlayName = overlayRole.value;
+          const pairTransform = transformForPair(baseName, overlayName);
+          if (!pairTransform) {
+            overlayLayer.style.transform = "none";
+            calibrationStageStatus.textContent =
+              `No saved homography exists for ${roleDisplayName(overlayName)} onto ${roleDisplayName(baseName)}.`;
+            return;
+          }
+
+          const imageSize = stageImageSize();
+          const scaledTransform = normalizeHomography(scaleHomographyToStage(pairTransform, imageSize));
+          overlayLayer.style.transform = homographyToCssMatrix3d(scaledTransform);
+          calibrationStageStatus.textContent =
+            `Calibration warp active for ${roleDisplayName(overlayName)} onto ${roleDisplayName(baseName)}. ` +
+            "Manual sliders now fine-tune on top of the checkerboard solve.";
+        } catch (error) {
+          console.error(error);
+          overlayLayer.style.transform = "none";
+          calibrationStageStatus.textContent = `Calibration warp failed: ${error.message}`;
+        }
+      }
+
+      async function loadCalibrationData() {
+        const calibrationUrls = [
+          "/api/calibration/current",
+          "/config/calibration/camera_alignment.json",
+        ];
+
+        for (const url of calibrationUrls) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              continue;
+            }
+            const payload = await response.json();
+            if (!payload.pairs) {
+              continue;
+            }
+            calibrationData = payload;
+            const pairSummaries = [];
+            for (const key of ["left_to_forward", "right_to_forward"]) {
+              const pair = payload.pairs[key];
+              if (!pair) {
+                continue;
+              }
+              pairSummaries.push(
+                `${pair.source_role} -> ${pair.target_role}: ${pair.pairs_used} captures, ${Number(pair.mean_error_px).toFixed(2)} px mean error`
+              );
+            }
+            setCalibrationStatus(`Loaded calibration. ${pairSummaries.join(" | ") || "Homographies ready."}`);
+            applyCalibrationTransform();
+            renderPanoramaFrame();
+            return true;
+          } catch (error) {
+            console.warn(`Calibration load failed from ${url}:`, error);
+          }
+        }
+
+        calibrationData = null;
+        setCalibrationStatus("Calibration: no saved checkerboard homography found yet.");
+        applyCalibrationTransform();
+        renderPanoramaFrame();
+        return false;
+      }
+
+      function formatDegrees(value) {
+        const rounded = Math.round(value * 10) / 10;
+        if (Number.isInteger(rounded)) {
+          return `${rounded.toFixed(0)} deg`;
+        }
+        return `${rounded.toFixed(1)} deg`;
+      }
+
+      function stopStreams() {
+        for (const stream of activeStreams) {
+          for (const track of stream.getTracks()) {
+            track.stop();
+          }
+        }
+        activeStreams = [];
+        roleStreams = new Map();
+        baseStage.srcObject = null;
+        overlayStage.srcObject = null;
+        refreshRoleLabels();
+        syncStageSources();
+        stopPanoramaLoop();
+      }
+
+      function attachStream(targets, stream) {
+        for (const target of targets) {
+          target.srcObject = stream;
+        }
+      }
+
+      function updateMountValueLabels() {
+        for (const role of ROLE_ORDER) {
+          roles[role].yawValue.textContent = formatDegrees(Number(roles[role].yawInput.value));
+        }
+        sharedFovValue.textContent = formatDegrees(Number(sharedFov.value));
+      }
+
+      function updateOverlayStyles() {
+        const opacityFraction = Number(opacity.value) / 100;
+        const scaleFactor = Number(scale.value) / 100;
+        overlayStage.style.opacity = String(opacityFraction);
+        overlayStage.style.transform =
+          `translate3d(${offsetX.value}px, ${offsetY.value}px, 0) scale(${scaleFactor})`;
+        overlayLayer.style.mixBlendMode = blendMode.value;
+
+        opacityValue.textContent = `${opacity.value}%`;
+        offsetXValue.textContent = `${offsetX.value}px`;
+        offsetYValue.textContent = `${offsetY.value}px`;
+        scaleValue.textContent = `${scaleFactor.toFixed(2)}x`;
+      }
+
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function updatePanoramaValueLabels() {
+        panoramaFeatherValue.textContent = `${panoramaFeather.value}%`;
+        panoramaLeftTrimValue.textContent = `${panoramaLeftTrim.value}px`;
+        panoramaRightTrimValue.textContent = `${panoramaRightTrim.value}px`;
+      }
+
+      function panoramaYOffset(role) {
+        if (role === "left") {
+          return Number(panoramaLeftTrim.value);
+        }
+        if (role === "right") {
+          return Number(panoramaRightTrim.value);
+        }
+        return 0;
+      }
+
+      function panoramaLayout() {
+        const imageSize = currentImageSize();
+        const fovDeg = Number(sharedFov.value);
+        if (!Number.isFinite(fovDeg) || fovDeg <= 0) {
+          return null;
+        }
+
+        const pxPerDeg = imageSize.width / fovDeg;
+        const entries = currentModels()
+          .map((model) => ({
+            ...model,
+            startDeg: model.centerDeg - model.fovDeg / 2,
+            endDeg: model.centerDeg + model.fovDeg / 2,
+            yOffset: panoramaYOffset(model.role),
+          }))
+          .sort((left, right) => left.startDeg - right.startDeg);
+
+        const minAngle = Math.min(...entries.map((entry) => entry.startDeg));
+        const maxAngle = Math.max(...entries.map((entry) => entry.endDeg));
+        const topPadding = Math.max(0, ...entries.map((entry) => Math.max(0, -entry.yOffset)));
+        const bottomPadding = Math.max(0, ...entries.map((entry) => Math.max(0, entry.yOffset)));
+        const featherFactor = Number(panoramaFeather.value) / 100;
+
+        entries.forEach((entry, index) => {
+          entry.x = Math.round((entry.startDeg - minAngle) * pxPerDeg);
+          entry.y = Math.round(topPadding + entry.yOffset);
+          entry.widthPx = imageSize.width;
+          entry.heightPx = imageSize.height;
+
+          const previous = entries[index - 1];
+          const next = entries[index + 1];
+          const overlapWithPrevious =
+            previous
+              ? Math.max(0, Math.min(entry.endDeg, previous.endDeg) - Math.max(entry.startDeg, previous.startDeg))
+              : 0;
+          const overlapWithNext =
+            next
+              ? Math.max(0, Math.min(entry.endDeg, next.endDeg) - Math.max(entry.startDeg, next.startDeg))
+              : 0;
+
+          entry.fadeInPx = overlapWithPrevious * pxPerDeg * featherFactor;
+          entry.fadeOutPx = overlapWithNext * pxPerDeg * featherFactor;
+        });
+
+        return {
+          imageSize,
+          entries,
+          minAngle,
+          maxAngle,
+          width: Math.max(1, Math.ceil((maxAngle - minAngle) * pxPerDeg)),
+          height: Math.max(1, Math.ceil(imageSize.height + topPadding + bottomPadding)),
+        };
+      }
+
+      function panoramaBuffer(role, imageSize) {
+        let buffer = panoramaBuffers.get(role);
+        if (!buffer) {
+          buffer = document.createElement("canvas");
+          panoramaBuffers.set(role, buffer);
+        }
+        if (buffer.width !== imageSize.width || buffer.height !== imageSize.height) {
+          buffer.width = imageSize.width;
+          buffer.height = imageSize.height;
+        }
+        return buffer;
+      }
+
+      function panoramaGradient(context, width, fadeLeftPx, fadeRightPx) {
+        const gradient = context.createLinearGradient(0, 0, width, 0);
+        let leftOpaqueStop = clamp(fadeLeftPx / width, 0, 1);
+        let rightOpaqueStop = clamp(1 - fadeRightPx / width, 0, 1);
+        if (leftOpaqueStop > rightOpaqueStop) {
+          const midpoint = (leftOpaqueStop + rightOpaqueStop) / 2;
+          leftOpaqueStop = midpoint;
+          rightOpaqueStop = midpoint;
+        }
+
+        gradient.addColorStop(0, fadeLeftPx > 0 ? "rgba(0, 0, 0, 0)" : "rgba(0, 0, 0, 1)");
+        gradient.addColorStop(leftOpaqueStop, "rgba(0, 0, 0, 1)");
+        gradient.addColorStop(rightOpaqueStop, "rgba(0, 0, 0, 1)");
+        gradient.addColorStop(1, fadeRightPx > 0 ? "rgba(0, 0, 0, 0)" : "rgba(0, 0, 0, 1)");
+        return gradient;
+      }
+
+      function drawPanoramaPlaceholder(message) {
+        const imageSize = currentImageSize();
+        panoramaFrame.style.setProperty("--stage-ratio", `${imageSize.width} / ${imageSize.height}`);
+        if (panoramaCanvas.width !== imageSize.width || panoramaCanvas.height !== imageSize.height) {
+          panoramaCanvas.width = imageSize.width;
+          panoramaCanvas.height = imageSize.height;
+        }
+        panoramaContext.fillStyle = "#0c1012";
+        panoramaContext.fillRect(0, 0, panoramaCanvas.width, panoramaCanvas.height);
+        panoramaContext.fillStyle = "rgba(255, 255, 255, 0.82)";
+        panoramaContext.font = '600 28px "Avenir Next", "Segoe UI", sans-serif';
+        panoramaContext.textAlign = "center";
+        panoramaContext.textBaseline = "middle";
+        panoramaContext.fillText(message, panoramaCanvas.width / 2, panoramaCanvas.height / 2);
+      }
+
+      function drawPanoramaRole(entry, imageSize) {
+        const video = roles[entry.role].preview;
+        if (!video.srcObject || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+          return false;
+        }
+
+        const buffer = panoramaBuffer(entry.role, imageSize);
+        const bufferContext = buffer.getContext("2d");
+        if (!bufferContext) {
+          return false;
+        }
+
+        bufferContext.clearRect(0, 0, buffer.width, buffer.height);
+        bufferContext.drawImage(video, 0, 0, buffer.width, buffer.height);
+
+        if (entry.fadeInPx > 0 || entry.fadeOutPx > 0) {
+          bufferContext.globalCompositeOperation = "destination-in";
+          bufferContext.fillStyle = panoramaGradient(
+            bufferContext,
+            buffer.width,
+            entry.fadeInPx,
+            entry.fadeOutPx
+          );
+          bufferContext.fillRect(0, 0, buffer.width, buffer.height);
+          bufferContext.globalCompositeOperation = "source-over";
+        }
+
+        panoramaContext.drawImage(buffer, entry.x, entry.y, entry.widthPx, entry.heightPx);
+        return true;
+      }
+
+      function renderPanoramaFrame() {
+        updatePanoramaValueLabels();
+
+        if (!panoramaContext) {
+          return;
+        }
+
+        const layout = panoramaLayout();
+        if (!layout) {
+          panoramaGeometry.textContent = "No stitched view yet";
+          panoramaStatus.textContent = "Set a valid shared FOV to build the panorama.";
+          drawPanoramaPlaceholder("Panorama unavailable");
+          return;
+        }
+
+        panoramaFrame.style.setProperty("--stage-ratio", `${layout.width} / ${layout.height}`);
+        if (panoramaCanvas.width !== layout.width || panoramaCanvas.height !== layout.height) {
+          panoramaCanvas.width = layout.width;
+          panoramaCanvas.height = layout.height;
+        }
+
+        panoramaContext.clearRect(0, 0, panoramaCanvas.width, panoramaCanvas.height);
+        panoramaContext.fillStyle = "#0c1012";
+        panoramaContext.fillRect(0, 0, panoramaCanvas.width, panoramaCanvas.height);
+
+        const drawOrder = [
+          ...layout.entries.filter((entry) => entry.role !== "forward"),
+          ...layout.entries.filter((entry) => entry.role === "forward"),
+        ];
+
+        let activeRoles = 0;
+        for (const entry of drawOrder) {
+          if (drawPanoramaRole(entry, layout.imageSize)) {
+            activeRoles += 1;
+          }
+        }
+
+        panoramaGeometry.textContent =
+          `${layout.width} x ${layout.height} panorama, span ${formatDegrees(layout.maxAngle - layout.minAngle)}`;
+
+        if (!activeRoles) {
+          panoramaStatus.textContent = "Start the cameras to render the stitched panorama.";
+          drawPanoramaPlaceholder("Start cameras for stitched view");
+          return;
+        }
+
+        const missingRoles = ROLE_ORDER.filter((role) => {
+          const video = roles[role].preview;
+          return !video.srcObject || video.readyState < 2 || !video.videoWidth;
+        });
+
+        if (missingRoles.length) {
+          panoramaStatus.textContent =
+            `Panorama is live, but ${missingRoles.map((role) => roleDisplayName(role)).join(", ")} ` +
+            `still need a video stream.`;
+          return;
+        }
+
+        panoramaStatus.textContent =
+          `Live stitched panorama across ${formatDegrees(layout.maxAngle - layout.minAngle)}. ` +
+          `Seam feather is using ${panoramaFeather.value}% of each overlap.`;
+      }
+
+      function startPanoramaLoop() {
+        if (panoramaAnimationFrame !== null) {
+          return;
+        }
+
+        const tick = () => {
+          renderPanoramaFrame();
+          panoramaAnimationFrame = window.requestAnimationFrame(tick);
+        };
+
+        panoramaAnimationFrame = window.requestAnimationFrame(tick);
+      }
+
+      function stopPanoramaLoop() {
+        if (panoramaAnimationFrame !== null) {
+          window.cancelAnimationFrame(panoramaAnimationFrame);
+          panoramaAnimationFrame = null;
+        }
+        renderPanoramaFrame();
+      }
+
+      function ensureDistinctOverlayRoles() {
+        if (baseRole.value !== overlayRole.value) {
+          return;
+        }
+        const replacement = ROLE_ORDER.find((role) => role !== baseRole.value) || "forward";
+        overlayRole.value = replacement;
+      }
+
+      function syncStageSources() {
+        ensureDistinctOverlayRoles();
+
+        const baseName = baseRole.value;
+        const overlayName = overlayRole.value;
+        const baseStream = roleStreams.get(baseName) || null;
+        const overlayStream = roleStreams.get(overlayName) || null;
+
+        baseStage.srcObject = baseStream;
+        overlayStage.srcObject = overlayStream;
+        baseStageLabel.textContent = `Base: ${roleDisplayName(baseName)}`;
+        overlayStageLabel.textContent = `Overlay: ${roleDisplayName(overlayName)}`;
+        applyCalibrationTransform();
+      }
+
+      function normalizeHeading(angleDeg) {
+        let normalized = ((angleDeg + 180) % 360 + 360) % 360 - 180;
+        if (normalized === -180 && angleDeg > 0) {
+          normalized = 180;
+        }
+        return normalized;
+      }
+
+      function coverageSegments(centerDeg, horizontalFovDeg) {
+        if (horizontalFovDeg <= 0) {
+          return [];
+        }
+        if (horizontalFovDeg >= 360) {
+          return [[-180, 180]];
+        }
+
+        const center = normalizeHeading(centerDeg);
+        const half = horizontalFovDeg / 2;
+        const start = center - half;
+        const end = center + half;
+
+        if (start < -180) {
+          return [[-180, end], [start + 360, 180]];
+        }
+        if (end > 180) {
+          return [[-180, end - 360], [start, 180]];
+        }
+        return [[start, end]];
+      }
+
+      function mergeSegments(segments) {
+        if (!segments.length) {
+          return [];
+        }
+
+        const merged = [];
+        const sorted = [...segments].sort((a, b) => a[0] - b[0]);
+        for (const [start, end] of sorted) {
+          if (!merged.length) {
+            merged.push([start, end]);
+            continue;
+          }
+
+          const last = merged[merged.length - 1];
+          if (start <= last[1]) {
+            last[1] = Math.max(last[1], end);
+            continue;
+          }
+          merged.push([start, end]);
+        }
+        return merged;
+      }
+
+      function overlapWidth(modelA, modelB) {
+        let total = 0;
+        for (const [startA, endA] of coverageSegments(modelA.centerDeg, modelA.fovDeg)) {
+          for (const [startB, endB] of coverageSegments(modelB.centerDeg, modelB.fovDeg)) {
+            const overlapStart = Math.max(startA, startB);
+            const overlapEnd = Math.min(endA, endB);
+            if (overlapEnd > overlapStart) {
+              total += overlapEnd - overlapStart;
+            }
+          }
+        }
+        return total;
+      }
+
+      function totalCoverageWidth(models) {
+        const allSegments = [];
+        for (const model of models) {
+          allSegments.push(...coverageSegments(model.centerDeg, model.fovDeg));
+        }
+        return mergeSegments(allSegments).reduce((sum, [start, end]) => sum + (end - start), 0);
+      }
+
+      function largestInternalGap(mergedSegments) {
+        let largest = 0;
+        for (let index = 1; index < mergedSegments.length; index += 1) {
+          largest = Math.max(largest, mergedSegments[index][0] - mergedSegments[index - 1][1]);
+        }
+        return largest;
+      }
+
+      function positionForAngle(angle) {
+        return ((angle + 180) / 360) * 100;
+      }
+
+      function renderLane(lane, roleName, segments) {
+        lane.innerHTML = "";
+        for (const [start, end] of segments) {
+          const segment = document.createElement("div");
+          segment.className = `lane-segment ${roleName}`;
+          segment.style.left = `${positionForAngle(start)}%`;
+          segment.style.width = `${((end - start) / 360) * 100}%`;
+          lane.appendChild(segment);
+        }
+      }
+
+      function currentModels() {
+        const fovDeg = Number(sharedFov.value);
+        return ROLE_ORDER.map((role) => ({
+          role,
+          centerDeg: Number(roles[role].yawInput.value),
+          fovDeg,
+        }));
+      }
+
+      function updateCoverageModel() {
+        updateMountValueLabels();
+
+        const models = currentModels();
+        const leftModel = models.find((model) => model.role === "left");
+        const forwardModel = models.find((model) => model.role === "forward");
+        const rightModel = models.find((model) => model.role === "right");
+
+        const allSegments = models.flatMap((model) => coverageSegments(model.centerDeg, model.fovDeg));
+        const mergedSegments = mergeSegments(allSegments);
+        const unionWidth = totalCoverageWidth(models);
+        const leftForward = overlapWidth(leftModel, forwardModel);
+        const forwardRight = overlapWidth(forwardModel, rightModel);
+        const leftRight = overlapWidth(leftModel, rightModel);
+        const gap = largestInternalGap(mergedSegments);
+
+        totalCoverage.textContent = formatDegrees(unionWidth);
+        leftForwardOverlap.textContent = formatDegrees(leftForward);
+        forwardRightOverlap.textContent = formatDegrees(forwardRight);
+        leftRightOverlap.textContent = formatDegrees(leftRight);
+        largestGap.textContent = formatDegrees(gap);
+        sectorCount.textContent = String(mergedSegments.length);
+
+        if (mergedSegments.length === 1) {
+          coverageState.textContent = "Contiguous coverage";
+          coverageState.style.background = "rgba(47, 111, 105, 0.12)";
+          coverageState.style.color = "var(--accent-2)";
+        } else {
+          coverageState.textContent = `${mergedSegments.length} sectors`;
+          coverageState.style.background = "rgba(196, 91, 41, 0.12)";
+          coverageState.style.color = "var(--accent)";
+        }
+
+        for (const model of models) {
+          renderLane(roles[model.role].lane, model.role, coverageSegments(model.centerDeg, model.fovDeg));
+        }
+
+        const segmentText = mergedSegments
+          .map(([start, end]) => `${formatDegrees(start)} to ${formatDegrees(end)}`)
+          .join(", ");
+        coverageNote.textContent =
+          `Modeled union: ${segmentText}. Left and forward overlap ${formatDegrees(leftForward)}, ` +
+          `forward and right overlap ${formatDegrees(forwardRight)}, and left and right overlap ${formatDegrees(leftRight)}.`;
+
+        renderPanoramaFrame();
+      }
+
+      function describeStream(stream) {
+        const track = stream.getVideoTracks()[0];
+        const settings = track ? track.getSettings() : {};
+        if (settings.width && settings.height) {
+          const resizeMode = settings.resizeMode ? ` ${settings.resizeMode}` : "";
+          return `${settings.width}x${settings.height}${resizeMode}`;
+        }
+        return "Live";
+      }
+
+      function buildVideoConstraints(deviceId, mode = "exact") {
+        const size =
+          mode === "exact"
+            ? {
+                width: { exact: TARGET_STREAM_WIDTH },
+                height: { exact: TARGET_STREAM_HEIGHT },
+              }
+            : {
+                width: { ideal: TARGET_STREAM_WIDTH },
+                height: { ideal: TARGET_STREAM_HEIGHT },
+              };
+
+        return {
+          deviceId: { exact: deviceId },
+          ...size,
+          aspectRatio: mode === "exact" ? { exact: 16 / 9 } : { ideal: 16 / 9 },
+          resizeMode: "none",
+          frameRate: { ideal: 30 },
+        };
+      }
+
+      async function tuneStreamResolution(stream) {
+        const track = stream.getVideoTracks()[0];
+        if (!track || typeof track.applyConstraints !== "function") {
+          return;
+        }
+
+        const settings = track.getSettings ? track.getSettings() : {};
+        if ((settings.width || 0) >= TARGET_STREAM_WIDTH && (settings.height || 0) >= TARGET_STREAM_HEIGHT) {
+          return;
+        }
+
+        const capabilities = typeof track.getCapabilities === "function" ? track.getCapabilities() : {};
+        const resizeModes = Array.isArray(capabilities.resizeMode) ? capabilities.resizeMode : [];
+        const supportsResizeNone = resizeModes.includes("none");
+
+        const attempts = [
+          {
+            width: { exact: TARGET_STREAM_WIDTH },
+            height: { exact: TARGET_STREAM_HEIGHT },
+            aspectRatio: { exact: 16 / 9 },
+            ...(supportsResizeNone ? { resizeMode: "none" } : {}),
+          },
+          {
+            width: { ideal: TARGET_STREAM_WIDTH },
+            height: { ideal: TARGET_STREAM_HEIGHT },
+            aspectRatio: { ideal: 16 / 9 },
+            ...(supportsResizeNone ? { resizeMode: "none" } : {}),
+          },
+        ];
+
+        for (const constraints of attempts) {
+          try {
+            await track.applyConstraints(constraints);
+            const updated = track.getSettings ? track.getSettings() : {};
+            if ((updated.width || 0) >= TARGET_STREAM_WIDTH && (updated.height || 0) >= TARGET_STREAM_HEIGHT) {
+              return;
+            }
+          } catch (error) {
+            console.warn("Stream constraint adjustment failed:", error);
+          }
+        }
+      }
+
+      async function openCameraStream(deviceId) {
+        const attempts = [
+          buildVideoConstraints(deviceId, "exact"),
+          buildVideoConstraints(deviceId, "ideal"),
+          { deviceId: { exact: deviceId } },
+        ];
+
+        let lastError = null;
+        for (const video of attempts) {
+          try {
+            return await navigator.mediaDevices.getUserMedia({
+              video,
+              audio: false,
+            });
+          } catch (error) {
+            lastError = error;
+          }
+        }
+
+        throw lastError || new Error(`Could not open camera ${deviceId}.`);
+      }
+
+      function populateSelect(select, devices, preferredIndex, storedValue) {
+        const previousValue = select.value;
+        select.innerHTML = "";
+
+        devices.forEach((device, index) => {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent = formatDeviceOptionLabel(device, index);
+          select.appendChild(option);
+        });
+
+        if (devices.some((device) => device.deviceId === previousValue)) {
+          select.value = previousValue;
+          return;
+        }
+
+        if (storedValue && devices.some((device) => device.deviceId === storedValue)) {
+          select.value = storedValue;
+          return;
+        }
+
+        if (devices[preferredIndex]) {
+          select.value = devices[preferredIndex].deviceId;
+          return;
+        }
+
+        if (devices[0]) {
+          select.value = devices[0].deviceId;
+        }
+      }
+
+      async function getVideoInputs() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        return devices.filter((device) => device.kind === "videoinput");
+      }
+
+      async function refreshDevices() {
+        const devices = await getVideoInputs();
+        const preferences = loadStoredPreferences();
+        for (const role of ROLE_ORDER) {
+          populateSelect(
+            roles[role].cameraSelect,
+            devices,
+            PREFERRED_DEVICE_INDEX[role],
+            preferences.deviceSelections?.[role]
+          );
+        }
+        saveStoredPreferences();
+        refreshRoleLabels();
+        setStatus(`Detected ${devices.length} camera device${devices.length === 1 ? "" : "s"}.`);
+      }
+
+      async function startCameras() {
+        stopStreams();
+
+        const selectedDevices = ROLE_ORDER.map((role) => roles[role].cameraSelect.value);
+        if (selectedDevices.some((deviceId) => !deviceId)) {
+          setStatus("Pick a device for left, forward, and right before starting.", true);
+          return;
+        }
+
+        const streamsByDevice = new Map();
+
+        try {
+          setStatus("Requesting browser camera access...");
+
+          for (const role of ROLE_ORDER) {
+            const deviceId = roles[role].cameraSelect.value;
+            let stream = streamsByDevice.get(deviceId);
+            if (!stream) {
+              stream = await openCameraStream(deviceId);
+              await tuneStreamResolution(stream);
+              streamsByDevice.set(deviceId, stream);
+            }
+            roleStreams.set(role, stream);
+          }
+
+          activeStreams = [...streamsByDevice.values()];
+
+          for (const role of ROLE_ORDER) {
+            const stream = roleStreams.get(role);
+            attachStream([roles[role].preview], stream);
+          }
+
+          saveStoredPreferences();
+          refreshRoleLabels();
+          syncStageSources();
+          renderPanoramaFrame();
+
+          const actualSizes = ROLE_ORDER.map((role) => describeStream(roleStreams.get(role)));
+          const allAtTarget = ROLE_ORDER.every((role) => {
+            const stream = roleStreams.get(role);
+            const track = stream?.getVideoTracks?.()[0];
+            const settings = track?.getSettings?.() || {};
+            return (settings.width || 0) >= TARGET_STREAM_WIDTH && (settings.height || 0) >= TARGET_STREAM_HEIGHT;
+          });
+
+          const uniqueDevices = new Set(selectedDevices).size;
+          if (uniqueDevices < selectedDevices.length) {
+            setStatus("Cameras running. Some roles share the same physical device, so one or more previews are mirrored.");
+          } else if (!allAtTarget) {
+            setStatus(
+              `Cameras are running, but the browser delivered ${actualSizes.join(" / ")} instead of full 1280x720. ` +
+              "That usually means the current browser or driver path is limiting the mode."
+            );
+          } else {
+            setStatus("All three cameras are running. The page requested 1280x720; check the preview labels to confirm the actual stream size.");
+          }
+
+          startPanoramaLoop();
+        } catch (error) {
+          console.error(error);
+          stopStreams();
+          setStatus(`Camera start failed: ${error.message}`, true);
+        }
+      }
+
+      async function bootstrap() {
+        applyStoredAliases();
+        updateMountValueLabels();
+        updateOverlayStyles();
+        updatePanoramaValueLabels();
+        updateCoverageModel();
+        updateStageGeometry();
+        refreshRoleLabels();
+        syncStageSources();
+        renderPanoramaFrame();
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus("This browser does not expose camera APIs on this page.", true);
+          return;
+        }
+
+        try {
+          const warmup = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: TARGET_STREAM_WIDTH },
+              height: { ideal: TARGET_STREAM_HEIGHT },
+              aspectRatio: { ideal: 16 / 9 },
+            },
+            audio: false,
+          });
+          warmup.getTracks().forEach((track) => track.stop());
+        } catch (error) {
+          console.warn("Warmup permission request failed:", error);
+        }
+
+        try {
+          await refreshDevices();
+        } catch (error) {
+          console.error(error);
+          setStatus(`Could not enumerate cameras: ${error.message}`, true);
+        }
+
+        await loadCalibrationData();
+      }
+
+      startButton.addEventListener("click", startCameras);
+      refreshButton.addEventListener("click", refreshDevices);
+      loadCalibrationButton.addEventListener("click", loadCalibrationData);
+      openCaptureButton.addEventListener("click", () => {
+        window.location.href = "/scripts/camera_calibration_capture.html";
+      });
+      baseRole.addEventListener("change", syncStageSources);
+      overlayRole.addEventListener("change", syncStageSources);
+      blendMode.addEventListener("change", updateOverlayStyles);
+      opacity.addEventListener("input", updateOverlayStyles);
+      offsetX.addEventListener("input", updateOverlayStyles);
+      offsetY.addEventListener("input", updateOverlayStyles);
+      scale.addEventListener("input", updateOverlayStyles);
+      sharedFov.addEventListener("input", updateCoverageModel);
+      panoramaFeather.addEventListener("input", renderPanoramaFrame);
+      panoramaLeftTrim.addEventListener("input", renderPanoramaFrame);
+      panoramaRightTrim.addEventListener("input", renderPanoramaFrame);
+
+      for (const role of ROLE_ORDER) {
+        roles[role].yawInput.addEventListener("input", updateCoverageModel);
+        roles[role].aliasInput.addEventListener("input", () => {
+          saveStoredPreferences();
+          refreshRoleLabels();
+          syncStageSources();
+          applyCalibrationTransform();
+          renderPanoramaFrame();
+        });
+        roles[role].cameraSelect.addEventListener("change", () => {
+          saveStoredPreferences();
+          refreshRoleLabels();
+          setStatus(`Updated ${roleDisplayName(role)} device choice. Click Start Cameras to apply it to the live streams.`);
+        });
+      }
+
+      baseStage.addEventListener("loadedmetadata", applyCalibrationTransform);
+      overlayStage.addEventListener("loadedmetadata", applyCalibrationTransform);
+      for (const role of ROLE_ORDER) {
+        roles[role].preview.addEventListener("loadedmetadata", renderPanoramaFrame);
+      }
+      window.addEventListener("resize", () => {
+        applyCalibrationTransform();
+        renderPanoramaFrame();
+      });
+      navigator.mediaDevices?.addEventListener?.("devicechange", refreshDevices);
+      window.addEventListener("beforeunload", stopStreams);
+
+      bootstrap();
+    </script>
+  </body>
+</html>

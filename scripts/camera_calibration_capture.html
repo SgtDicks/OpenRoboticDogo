@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doggo Checkerboard Capture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg-1: #f8f3ea;
+        --bg-2: #ebe0cf;
+        --panel: rgba(255, 252, 247, 0.94);
+        --ink: #1f2421;
+        --muted: #5a645b;
+        --line: rgba(31, 36, 33, 0.12);
+        --accent: #c45b29;
+        --accent-2: #2f6f69;
+        --shadow: 0 18px 50px rgba(62, 49, 35, 0.11);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(196, 91, 41, 0.18), transparent 28%),
+          radial-gradient(circle at top right, rgba(47, 111, 105, 0.14), transparent 26%),
+          linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 100%);
+      }
+
+      main {
+        width: min(1320px, calc(100vw - 32px));
+        margin: 24px auto 48px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero,
+      .controls,
+      .guidance,
+      .previews {
+        padding: 22px;
+      }
+
+      h1,
+      h2 {
+        margin: 0 0 8px;
+        letter-spacing: -0.03em;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        font-size: 0.92rem;
+        color: var(--muted);
+      }
+
+      select,
+      input,
+      button {
+        font: inherit;
+      }
+
+      select,
+      input {
+        width: 100%;
+        min-height: 44px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        padding: 0 12px;
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--ink);
+      }
+
+      .button-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      button {
+        min-height: 46px;
+        border: 0;
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .primary {
+        background: linear-gradient(135deg, var(--accent), #d27d34);
+        color: white;
+      }
+
+      .secondary {
+        background: linear-gradient(135deg, var(--accent-2), #548f7c);
+        color: white;
+      }
+
+      .status {
+        margin-top: 14px;
+        color: var(--muted);
+      }
+
+      .status strong {
+        color: var(--ink);
+      }
+
+      .status-inline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .detection-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 30px;
+        padding: 0 12px;
+        border-radius: 999px;
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        border: 1px solid var(--line);
+        background: rgba(31, 36, 33, 0.06);
+        color: var(--muted);
+      }
+
+      .detection-pill.detected {
+        background: rgba(47, 111, 105, 0.14);
+        color: #174742;
+        border-color: rgba(47, 111, 105, 0.22);
+      }
+
+      .detection-pill.missing {
+        background: rgba(196, 91, 41, 0.14);
+        color: #8b3a19;
+        border-color: rgba(196, 91, 41, 0.22);
+      }
+
+      .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+      }
+
+      .preview-card {
+        display: grid;
+        gap: 10px;
+      }
+
+      .preview-card video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: contain;
+        object-position: center;
+        border-radius: 18px;
+        background: #111;
+      }
+
+      .preview-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .guidance ul {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--muted);
+      }
+
+      .guidance li + li {
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel hero">
+        <h1>Doggo Checkerboard Capture</h1>
+        <p>
+          Use this page to save synchronized left, forward, and right checkerboard snapshots into the repo. After you
+          collect a good spread of captures, solve the calibration with the Python helper.
+        </p>
+      </section>
+
+      <section class="panel controls">
+        <div class="grid">
+          <label>
+            Session name
+            <input id="sessionName" type="text" />
+          </label>
+          <label>
+            Inner corner columns
+            <input id="patternCols" type="number" min="2" step="1" value="9" />
+          </label>
+          <label>
+            Inner corner rows
+            <input id="patternRows" type="number" min="2" step="1" value="6" />
+          </label>
+          <label>
+            Square size (mm, optional)
+            <input id="squareSizeMm" type="number" min="1" step="0.1" value="25" />
+          </label>
+          <label>
+            Left device
+            <select id="leftCamera"></select>
+          </label>
+          <label>
+            Left friendly name
+            <input id="leftAlias" type="text" placeholder="Left camera" />
+          </label>
+          <label>
+            Forward device
+            <select id="forwardCamera"></select>
+          </label>
+          <label>
+            Forward friendly name
+            <input id="forwardAlias" type="text" placeholder="Forward camera" />
+          </label>
+          <label>
+            Right device
+            <select id="rightCamera"></select>
+          </label>
+          <label>
+            Right friendly name
+            <input id="rightAlias" type="text" placeholder="Right camera" />
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button id="startButton" class="primary" type="button">Start Cameras</button>
+          <button id="checkButton" class="secondary" type="button">Check Board</button>
+          <button id="captureButton" class="secondary" type="button">Capture Triple</button>
+          <button id="refreshButton" class="secondary" type="button">Refresh Devices</button>
+          <button id="viewerButton" class="secondary" type="button">Open Viewer</button>
+        </div>
+
+        <div class="status" id="status">
+          Waiting for camera access. Start the three streams, hold the checkerboard where all three cameras can see it,
+          and then save several captures from different positions.
+        </div>
+        <div class="status">
+          Friendly names and device choices are stored in this browser so the three identical USB cameras stay easier to track.
+        </div>
+        <div class="status-inline">
+          <span id="leftForwardPair" class="detection-pill">Left + forward not checked</span>
+          <span id="rightForwardPair" class="detection-pill">Right + forward not checked</span>
+        </div>
+      </section>
+
+      <section class="panel guidance">
+        <h2>Capture Tips</h2>
+        <ul>
+          <li>Use a printed rectangular checkerboard and keep it upright while moving it around.</li>
+          <li>Collect 12 to 20 captures with the board centered, near the edges, tilted, and at different distances.</li>
+          <li>For left calibration, the full board must be visible in left plus forward. For right calibration, it must be visible in right plus forward.</li>
+          <li>After capture, run `./.venv/bin/python scripts/camera_calibrate_checkerboard.py --capture-dir config/calibration/captures/&lt;session&gt;`.</li>
+        </ul>
+      </section>
+
+      <section class="panel previews">
+        <div class="preview-grid">
+          <article class="preview-card">
+            <div class="preview-meta">
+              <strong>Left</strong>
+              <span id="leftLabel">Not started</span>
+            </div>
+            <div id="leftDetection" class="detection-pill">Board not checked</div>
+            <video id="leftPreview" autoplay playsinline muted></video>
+          </article>
+
+          <article class="preview-card">
+            <div class="preview-meta">
+              <strong>Forward</strong>
+              <span id="forwardLabel">Not started</span>
+            </div>
+            <div id="forwardDetection" class="detection-pill">Board not checked</div>
+            <video id="forwardPreview" autoplay playsinline muted></video>
+          </article>
+
+          <article class="preview-card">
+            <div class="preview-meta">
+              <strong>Right</strong>
+              <span id="rightLabel">Not started</span>
+            </div>
+            <div id="rightDetection" class="detection-pill">Board not checked</div>
+            <video id="rightPreview" autoplay playsinline muted></video>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const ROLE_PREFERENCES_KEY = "doggo-camera-role-preferences-v1";
+      const TARGET_STREAM_WIDTH = 1280;
+      const TARGET_STREAM_HEIGHT = 720;
+      const ROLE_ORDER = ["left", "forward", "right"];
+      const ROLE_LABELS = {
+        left: "Left",
+        forward: "Forward",
+        right: "Right",
+      };
+      const PREFERRED_DEVICE_INDEX = {
+        left: 1,
+        forward: 0,
+        right: 2,
+      };
+
+      const roles = {
+        left: {
+          select: document.getElementById("leftCamera"),
+          aliasInput: document.getElementById("leftAlias"),
+          preview: document.getElementById("leftPreview"),
+          label: document.getElementById("leftLabel"),
+          detection: document.getElementById("leftDetection"),
+        },
+        forward: {
+          select: document.getElementById("forwardCamera"),
+          aliasInput: document.getElementById("forwardAlias"),
+          preview: document.getElementById("forwardPreview"),
+          label: document.getElementById("forwardLabel"),
+          detection: document.getElementById("forwardDetection"),
+        },
+        right: {
+          select: document.getElementById("rightCamera"),
+          aliasInput: document.getElementById("rightAlias"),
+          preview: document.getElementById("rightPreview"),
+          label: document.getElementById("rightLabel"),
+          detection: document.getElementById("rightDetection"),
+        },
+      };
+
+      const sessionName = document.getElementById("sessionName");
+      const patternCols = document.getElementById("patternCols");
+      const patternRows = document.getElementById("patternRows");
+      const squareSizeMm = document.getElementById("squareSizeMm");
+      const startButton = document.getElementById("startButton");
+      const checkButton = document.getElementById("checkButton");
+      const captureButton = document.getElementById("captureButton");
+      const refreshButton = document.getElementById("refreshButton");
+      const viewerButton = document.getElementById("viewerButton");
+      const status = document.getElementById("status");
+      const leftForwardPair = document.getElementById("leftForwardPair");
+      const rightForwardPair = document.getElementById("rightForwardPair");
+
+      let activeStreams = [];
+      let roleStreams = new Map();
+      let captureCount = 0;
+
+      function setStatus(message, strong = false) {
+        status.innerHTML = strong ? `<strong>${message}</strong>` : message;
+      }
+
+      function setDetectionPill(element, message, state = "") {
+        element.textContent = message;
+        element.classList.remove("detected", "missing");
+        if (state) {
+          element.classList.add(state);
+        }
+      }
+
+      function resetDetectionStatus() {
+        for (const role of ROLE_ORDER) {
+          setDetectionPill(roles[role].detection, "Board not checked");
+        }
+        setDetectionPill(leftForwardPair, "Left + forward not checked");
+        setDetectionPill(rightForwardPair, "Right + forward not checked");
+      }
+
+      function defaultAlias(role) {
+        return `${ROLE_LABELS[role]} camera`;
+      }
+
+      function loadStoredPreferences() {
+        try {
+          return JSON.parse(localStorage.getItem(ROLE_PREFERENCES_KEY) || "{}");
+        } catch (error) {
+          console.warn("Could not parse stored camera role preferences:", error);
+          return {};
+        }
+      }
+
+      function saveStoredPreferences() {
+        const preferences = {
+          aliases: Object.fromEntries(
+            ROLE_ORDER.map((role) => [role, roles[role].aliasInput.value.trim() || defaultAlias(role)])
+          ),
+          deviceSelections: Object.fromEntries(
+            ROLE_ORDER.map((role) => [role, roles[role].select.value || ""])
+          ),
+        };
+        localStorage.setItem(ROLE_PREFERENCES_KEY, JSON.stringify(preferences));
+      }
+
+      function applyStoredAliases() {
+        const preferences = loadStoredPreferences();
+        for (const role of ROLE_ORDER) {
+          roles[role].aliasInput.value = preferences.aliases?.[role] || defaultAlias(role);
+        }
+      }
+
+      function roleDisplayName(role) {
+        return roles[role].aliasInput.value.trim() || defaultAlias(role);
+      }
+
+      function selectedDeviceLabel(role) {
+        return roles[role].select.selectedOptions[0]?.textContent || "No device selected";
+      }
+
+      function formatDeviceOptionLabel(device, index) {
+        const deviceName = device.label || `Camera ${index + 1}`;
+        const shortId = device.deviceId ? device.deviceId.slice(-6) : `slot-${index + 1}`;
+        return `${deviceName} [${index + 1}] ${shortId}`;
+      }
+
+      function refreshRoleLabels() {
+        for (const role of ROLE_ORDER) {
+          const stream = roleStreams.get(role);
+          if (stream) {
+            roles[role].label.textContent =
+              `${roleDisplayName(role)} - ${selectedDeviceLabel(role)} - ${describeStream(stream)}`;
+          } else {
+            roles[role].label.textContent = `${roleDisplayName(role)} - not started`;
+          }
+        }
+      }
+
+      function defaultSessionName() {
+        return new Date().toISOString().replace(/[:.]/g, "-");
+      }
+
+      function stopStreams() {
+        for (const stream of activeStreams) {
+          for (const track of stream.getTracks()) {
+            track.stop();
+          }
+        }
+        activeStreams = [];
+        roleStreams = new Map();
+        refreshRoleLabels();
+        resetDetectionStatus();
+      }
+
+      function attachStream(video, stream) {
+        video.srcObject = stream;
+      }
+
+      function describeStream(stream) {
+        const track = stream.getVideoTracks()[0];
+        const settings = track ? track.getSettings() : {};
+        if (settings.width && settings.height) {
+          const resizeMode = settings.resizeMode ? ` ${settings.resizeMode}` : "";
+          return `${settings.width}x${settings.height}${resizeMode}`;
+        }
+        return "Live";
+      }
+
+      function buildVideoConstraints(deviceId, mode = "exact") {
+        const size =
+          mode === "exact"
+            ? {
+                width: { exact: TARGET_STREAM_WIDTH },
+                height: { exact: TARGET_STREAM_HEIGHT },
+              }
+            : {
+                width: { ideal: TARGET_STREAM_WIDTH },
+                height: { ideal: TARGET_STREAM_HEIGHT },
+              };
+
+        return {
+          deviceId: { exact: deviceId },
+          ...size,
+          aspectRatio: mode === "exact" ? { exact: 16 / 9 } : { ideal: 16 / 9 },
+          resizeMode: "none",
+          frameRate: { ideal: 30 },
+        };
+      }
+
+      async function tuneStreamResolution(stream) {
+        const track = stream.getVideoTracks()[0];
+        if (!track || typeof track.applyConstraints !== "function") {
+          return;
+        }
+
+        const settings = track.getSettings ? track.getSettings() : {};
+        if ((settings.width || 0) >= TARGET_STREAM_WIDTH && (settings.height || 0) >= TARGET_STREAM_HEIGHT) {
+          return;
+        }
+
+        const capabilities = typeof track.getCapabilities === "function" ? track.getCapabilities() : {};
+        const resizeModes = Array.isArray(capabilities.resizeMode) ? capabilities.resizeMode : [];
+        const supportsResizeNone = resizeModes.includes("none");
+
+        const attempts = [
+          {
+            width: { exact: TARGET_STREAM_WIDTH },
+            height: { exact: TARGET_STREAM_HEIGHT },
+            aspectRatio: { exact: 16 / 9 },
+            ...(supportsResizeNone ? { resizeMode: "none" } : {}),
+          },
+          {
+            width: { ideal: TARGET_STREAM_WIDTH },
+            height: { ideal: TARGET_STREAM_HEIGHT },
+            aspectRatio: { ideal: 16 / 9 },
+            ...(supportsResizeNone ? { resizeMode: "none" } : {}),
+          },
+        ];
+
+        for (const constraints of attempts) {
+          try {
+            await track.applyConstraints(constraints);
+            const updated = track.getSettings ? track.getSettings() : {};
+            if ((updated.width || 0) >= TARGET_STREAM_WIDTH && (updated.height || 0) >= TARGET_STREAM_HEIGHT) {
+              return;
+            }
+          } catch (error) {
+            console.warn("Stream constraint adjustment failed:", error);
+          }
+        }
+      }
+
+      async function openCameraStream(deviceId) {
+        const attempts = [
+          buildVideoConstraints(deviceId, "exact"),
+          buildVideoConstraints(deviceId, "ideal"),
+          { deviceId: { exact: deviceId } },
+        ];
+
+        let lastError = null;
+        for (const video of attempts) {
+          try {
+            return await navigator.mediaDevices.getUserMedia({
+              video,
+              audio: false,
+            });
+          } catch (error) {
+            lastError = error;
+          }
+        }
+
+        throw lastError || new Error(`Could not open camera ${deviceId}.`);
+      }
+
+      function populateSelect(select, devices, preferredIndex, storedValue) {
+        const previousValue = select.value;
+        select.innerHTML = "";
+
+        devices.forEach((device, index) => {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent = formatDeviceOptionLabel(device, index);
+          select.appendChild(option);
+        });
+
+        if (devices.some((device) => device.deviceId === previousValue)) {
+          select.value = previousValue;
+          return;
+        }
+        if (storedValue && devices.some((device) => device.deviceId === storedValue)) {
+          select.value = storedValue;
+          return;
+        }
+        if (devices[preferredIndex]) {
+          select.value = devices[preferredIndex].deviceId;
+          return;
+        }
+        if (devices[0]) {
+          select.value = devices[0].deviceId;
+        }
+      }
+
+      async function getVideoInputs() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        return devices.filter((device) => device.kind === "videoinput");
+      }
+
+      async function refreshDevices() {
+        const devices = await getVideoInputs();
+        const preferences = loadStoredPreferences();
+        for (const role of ROLE_ORDER) {
+          populateSelect(roles[role].select, devices, PREFERRED_DEVICE_INDEX[role], preferences.deviceSelections?.[role]);
+        }
+        saveStoredPreferences();
+        refreshRoleLabels();
+        setStatus(`Detected ${devices.length} camera device${devices.length === 1 ? "" : "s"}.`);
+      }
+
+      async function startCameras() {
+        stopStreams();
+
+        const selectedDevices = ROLE_ORDER.map((role) => roles[role].select.value);
+        if (selectedDevices.some((deviceId) => !deviceId)) {
+          setStatus("Pick a device for left, forward, and right first.", true);
+          return;
+        }
+
+        const streamsByDevice = new Map();
+        try {
+          setStatus("Requesting browser camera access...");
+          for (const role of ROLE_ORDER) {
+            const deviceId = roles[role].select.value;
+            let stream = streamsByDevice.get(deviceId);
+            if (!stream) {
+              stream = await openCameraStream(deviceId);
+              await tuneStreamResolution(stream);
+              streamsByDevice.set(deviceId, stream);
+            }
+            roleStreams.set(role, stream);
+          }
+
+          activeStreams = [...streamsByDevice.values()];
+          for (const role of ROLE_ORDER) {
+            const stream = roleStreams.get(role);
+            attachStream(roles[role].preview, stream);
+          }
+          saveStoredPreferences();
+          refreshRoleLabels();
+
+          const actualSizes = ROLE_ORDER.map((role) => describeStream(roleStreams.get(role)));
+          const allAtTarget = ROLE_ORDER.every((role) => {
+            const stream = roleStreams.get(role);
+            const track = stream?.getVideoTracks?.()[0];
+            const settings = track?.getSettings?.() || {};
+            return (settings.width || 0) >= TARGET_STREAM_WIDTH && (settings.height || 0) >= TARGET_STREAM_HEIGHT;
+          });
+
+          if (!allAtTarget) {
+            setStatus(
+              `The browser delivered ${actualSizes.join(" / ")} instead of full 1280x720. ` +
+              "Captures at this size may miss your true wide FOV."
+            );
+          } else {
+            setStatus("Three camera streams are running at the requested 1280x720 class. Capture the checkerboard now.");
+          }
+        } catch (error) {
+          console.error(error);
+          stopStreams();
+          setStatus(`Camera start failed: ${error.message}`, true);
+        }
+      }
+
+      function snapshotDataUrl(video) {
+        if (!video.videoWidth || !video.videoHeight) {
+          throw new Error("One or more camera previews are not ready yet.");
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext("2d");
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png");
+      }
+
+      function buildSnapshotPayload() {
+        return {
+          pattern_columns: Number(patternCols.value),
+          pattern_rows: Number(patternRows.value),
+          images: Object.fromEntries(
+            ROLE_ORDER.map((role) => [role, snapshotDataUrl(roles[role].preview)])
+          ),
+        };
+      }
+
+      async function checkCheckerboard() {
+        if (!ROLE_ORDER.every((role) => roleStreams.get(role))) {
+          setStatus("Start the cameras before checking the board.", true);
+          return;
+        }
+
+        const payload = buildSnapshotPayload();
+        try {
+          setStatus(`Checking ${payload.pattern_columns} x ${payload.pattern_rows} checkerboard visibility...`);
+          const response = await fetch("/api/calibration/checkerboard", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) {
+            throw new Error(result.error || "Checkerboard check failed.");
+          }
+
+          for (const role of ROLE_ORDER) {
+            const roleResult = result.results?.[role];
+            const resolution = roleResult?.resolution
+              ? `${roleResult.resolution.width}x${roleResult.resolution.height}`
+              : "unknown size";
+            if (roleResult?.detected) {
+              setDetectionPill(roles[role].detection, `${roleDisplayName(role)} sees board (${resolution})`, "detected");
+            } else {
+              setDetectionPill(roles[role].detection, `${roleDisplayName(role)} missing full board (${resolution})`, "missing");
+            }
+          }
+
+          const leftForwardDetected = Boolean(result.pairwise_overlap?.left_forward?.detected);
+          const rightForwardDetected = Boolean(result.pairwise_overlap?.right_forward?.detected);
+          setDetectionPill(
+            leftForwardPair,
+            leftForwardDetected ? "Left + forward overlap is usable" : "Left + forward overlap missing",
+            leftForwardDetected ? "detected" : "missing"
+          );
+          setDetectionPill(
+            rightForwardPair,
+            rightForwardDetected ? "Right + forward overlap is usable" : "Right + forward overlap missing",
+            rightForwardDetected ? "detected" : "missing"
+          );
+
+          if (leftForwardDetected && rightForwardDetected) {
+            setStatus("Great, both side overlaps can see the full board. This is a good time to save captures.");
+          } else if (leftForwardDetected || rightForwardDetected) {
+            setStatus(
+              "One side overlap is usable. Save a few captures here, then move the board into the other side overlap and check again."
+            );
+          } else {
+            setStatus(
+              "No usable side overlap yet. Move the checkerboard so the full pattern is visible in forward plus one side camera, then run Check Board again.",
+              true
+            );
+          }
+        } catch (error) {
+          console.error(error);
+          resetDetectionStatus();
+          setStatus(`Checkerboard check failed: ${error.message}`, true);
+        }
+      }
+
+      async function captureTriple() {
+        if (!ROLE_ORDER.every((role) => roleStreams.get(role))) {
+          setStatus("Start the cameras before capturing.", true);
+          return;
+        }
+
+        captureCount += 1;
+        const captureLabel = `capture_${String(captureCount).padStart(3, "0")}`;
+        const payload = {
+          session: sessionName.value.trim() || defaultSessionName(),
+          capture_label: captureLabel,
+          ...buildSnapshotPayload(),
+          square_size_mm: squareSizeMm.value,
+          device_labels: Object.fromEntries(
+            ROLE_ORDER.map((role) => [
+              role,
+              {
+                friendly_name: roleDisplayName(role),
+                device_label: selectedDeviceLabel(role),
+              },
+            ])
+          ),
+        };
+
+        try {
+          setStatus(`Saving ${captureLabel}...`);
+          const response = await fetch("/api/calibration/capture", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) {
+            throw new Error(result.error || "Capture save failed.");
+          }
+          sessionName.value = result.session;
+          setStatus(
+            `Saved ${captureLabel} to ${result.session}. Keep going until you have a good spread, then run the calibration solver.`
+          );
+        } catch (error) {
+          console.error(error);
+          captureCount -= 1;
+          setStatus(`Capture failed: ${error.message}`, true);
+        }
+      }
+
+      async function bootstrap() {
+        sessionName.value = defaultSessionName();
+        applyStoredAliases();
+        refreshRoleLabels();
+        resetDetectionStatus();
+
+        try {
+          const warmup = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: TARGET_STREAM_WIDTH },
+              height: { ideal: TARGET_STREAM_HEIGHT },
+              aspectRatio: { ideal: 16 / 9 },
+            },
+            audio: false,
+          });
+          warmup.getTracks().forEach((track) => track.stop());
+        } catch (error) {
+          console.warn("Warmup permission request failed:", error);
+        }
+
+        try {
+          await refreshDevices();
+        } catch (error) {
+          console.error(error);
+          setStatus(`Could not enumerate cameras: ${error.message}`, true);
+        }
+      }
+
+      startButton.addEventListener("click", startCameras);
+      checkButton.addEventListener("click", checkCheckerboard);
+      captureButton.addEventListener("click", captureTriple);
+      refreshButton.addEventListener("click", refreshDevices);
+      viewerButton.addEventListener("click", () => {
+        window.location.href = "/scripts/camera_overlap_browser.html";
+      });
+      for (const role of ROLE_ORDER) {
+        roles[role].aliasInput.addEventListener("input", () => {
+          saveStoredPreferences();
+          refreshRoleLabels();
+        });
+        roles[role].select.addEventListener("change", () => {
+          saveStoredPreferences();
+          refreshRoleLabels();
+          setStatus(`Updated ${roleDisplayName(role)} device choice. Click Start Cameras to apply it to the live previews.`);
+        });
+      }
+      navigator.mediaDevices?.addEventListener?.("devicechange", refreshDevices);
+      window.addEventListener("beforeunload", stopStreams);
+
+      bootstrap();
+    </script>
+  </body>
+</html>

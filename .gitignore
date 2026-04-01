@@ -63,3 +63,6 @@ config.local.py
 .codex_tmp/
 *.state.json
 *_state.json
+config/calibration/captures/
+config/calibration/previews/
+config/calibration/camera_alignment.json
