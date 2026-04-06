@@ -37,6 +37,7 @@ Buttons:
 - `Stop`
 - `Play Last`
 - `Save Last As`
+- `Save Current As`
 - `Play Saved`
 
 ## Recommended relaxed capture workflow
@@ -50,6 +51,23 @@ Buttons:
 7. Press `Stop` if needed, or let duration or idle-stop end the capture.
 8. Press `Save Last As` if you want to keep the clip.
 9. Use `Play Last` or `Play Saved` to test replay.
+
+## Save a single current position
+
+If you already have Doggo posed where you want it, you can skip timed recording and save the current live servo readings as a one-frame clip.
+
+From the web UI:
+
+- set the clip name
+- press `Save Current As`
+
+From the CLI:
+
+```powershell
+doggo --config config\doggo.local.yaml save-current --name StandSnapshot
+```
+
+This reads all reachable configured servos once and stores the result as a saved clip you can replay later.
 
 ## Stop reasons
 

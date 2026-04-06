@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("stop-recording", help="Stop the active motion recording.")
     save_recording_parser = subparsers.add_parser("save-recording", help="Save the last motion recording under a name.")
     save_recording_parser.add_argument("--name", required=True)
+    save_current_parser = subparsers.add_parser(
+        "save-current",
+        help="Read the current servo positions and save them as a single-frame motion clip.",
+    )
+    save_current_parser.add_argument("--name", required=True)
     playback_parser = subparsers.add_parser("playback", help="Play back the latest recorded motion clip.")
     playback_parser.add_argument("--name", default=None)
     playback_parser.add_argument("--speed", type=int, default=None)
@@ -219,6 +224,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(snapshot, indent=2))
         elif args.command == "save-recording":
             recording = supervisor.save_recording(args.name)
+            print(recording.model_dump_json(indent=2))
+        elif args.command == "save-current":
+            recording = asyncio.run(supervisor.save_current_recording(args.name))
             print(recording.model_dump_json(indent=2))
         elif args.command == "playback":
             recording = asyncio.run(

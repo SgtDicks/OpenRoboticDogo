@@ -127,6 +127,19 @@ def create_app(config_path: str | Path = "config/doggo.local.yaml") -> FastAPI:
             "status": get_runtime().supervisor.status_snapshot(),
         }
 
+    @app.post("/api/motion/current/save")
+    async def save_current_recording(request: MotionSaveRequest) -> dict:
+        try:
+            recording = await get_runtime().supervisor.save_current_recording(request.name)
+        except ServoBusError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "recording": get_runtime().supervisor.recording_snapshot(),
+            "saved_recordings": get_runtime().supervisor.list_saved_recordings(),
+            "saved": recording.model_dump(mode="json"),
+            "status": get_runtime().supervisor.status_snapshot(),
+        }
+
     @app.post("/api/motion/playback")
     async def playback_motion(request: MotionPlaybackRequest) -> dict:
         try:

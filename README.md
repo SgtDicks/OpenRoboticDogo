@@ -74,6 +74,7 @@ The software here is a fresh control build shaped around the confirmed hardware:
 - servo scanning, ID assignment, single-servo moves, and readback
 - saved stand, sit, storage, and calibration poses
 - web dashboard with pose controls, live health, touch sliders, servo monitor, and motion capture tools
+- browser sequencer for chaining pose commands, waits, playback, and save-current steps
 - variable-duration motion recording, saved recordings, and playback
 - first-pass crawl gait wiring for browser and future ESP32 teleop
 
@@ -138,6 +139,7 @@ doggo --config config\doggo.local.yaml relax
 doggo --config config\doggo.local.yaml record --name wave --duration-ms 10000
 doggo --config config\doggo.local.yaml stop-recording
 doggo --config config\doggo.local.yaml save-recording --name Wave
+doggo --config config\doggo.local.yaml save-current --name StandSnapshot
 doggo --config config\doggo.local.yaml playback
 doggo --config config\doggo.local.yaml playback --name Wave
 doggo --config config\doggo.local.yaml serve

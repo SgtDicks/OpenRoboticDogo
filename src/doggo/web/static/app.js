@@ -17,11 +17,20 @@ const motionRecordButton = document.getElementById("motion-record");
 const motionStopButton = document.getElementById("motion-stop");
 const motionPlaybackButton = document.getElementById("motion-playback");
 const motionSaveButton = document.getElementById("motion-save");
+const motionSaveCurrentButton = document.getElementById("motion-save-current");
 const motionPlaybackSavedButton = document.getElementById("motion-playback-saved");
 const motionNameInput = document.getElementById("motion-name");
 const motionDurationInput = document.getElementById("motion-duration-seconds");
 const motionIdleInput = document.getElementById("motion-idle-seconds");
+const motionPlaybackSpeedInput = document.getElementById("motion-playback-speed");
 const savedRecordingsSelect = document.getElementById("saved-recordings");
+const sequenceScriptInput = document.getElementById("sequence-script");
+const sequenceRunButton = document.getElementById("sequence-run");
+const sequenceStopButton = document.getElementById("sequence-stop");
+const sequenceExampleButton = document.getElementById("sequence-example");
+const sequenceSavedClipSelect = document.getElementById("sequence-saved-clip");
+const sequenceInsertSavedButton = document.getElementById("sequence-insert-saved");
+const sequenceStatus = document.getElementById("sequence-status");
 
 const axisForward = document.getElementById("axis-forward");
 const axisStrafe = document.getElementById("axis-strafe");
@@ -47,6 +56,18 @@ let lastTeleopErrorAt = 0;
 let motionBusy = false;
 let motionStatusTimer = null;
 let latestSavedRecordings = [];
+let sequenceBusy = false;
+let sequenceStopRequested = false;
+
+const sequenceManagedButtons = [
+  document.getElementById("refresh-health"),
+  document.getElementById("scan-servos"),
+  document.getElementById("read-positions"),
+  document.getElementById("pose-stand"),
+  document.getElementById("pose-sit"),
+  document.getElementById("pose-storage"),
+  document.getElementById("pose-relax"),
+].filter(Boolean);
 
 const keyboardAxes = { forward: 0, strafe: 0, turn: 0 };
 const touchAxes = { forward: 0, strafe: 0, turn: 0 };
@@ -204,17 +225,26 @@ function renderSavedRecordings(savedRecordings = []) {
   latestSavedRecordings = Array.isArray(savedRecordings) ? savedRecordings : [];
   if (!latestSavedRecordings.length) {
     savedRecordingsSelect.innerHTML = '<option value="">No saved clips yet</option>';
+    sequenceSavedClipSelect.innerHTML = '<option value="">No saved clips yet</option>';
+    refreshBusyState();
     return;
   }
 
-  const currentValue = savedRecordingsSelect.value;
-  savedRecordingsSelect.innerHTML = latestSavedRecordings
+  const options = latestSavedRecordings
     .map((entry) => `<option value="${entry.name}">${entry.name} (${(entry.duration_ms / 1000).toFixed(1)}s)</option>`)
     .join("");
 
-  if (latestSavedRecordings.some((entry) => entry.name === currentValue)) {
-    savedRecordingsSelect.value = currentValue;
-  }
+  const applySavedRecordingOptions = (select) => {
+    const currentValue = select.value;
+    select.innerHTML = options;
+    if (latestSavedRecordings.some((entry) => entry.name === currentValue)) {
+      select.value = currentValue;
+    }
+  };
+
+  applySavedRecordingOptions(savedRecordingsSelect);
+  applySavedRecordingOptions(sequenceSavedClipSelect);
+  refreshBusyState();
 }
 
 function renderRecording(recording) {
@@ -237,12 +267,43 @@ function setMotionControlsBusy(isBusy) {
   motionRecordButton.disabled = isBusy;
   motionPlaybackButton.disabled = isBusy;
   motionSaveButton.disabled = isBusy;
+  motionSaveCurrentButton.disabled = isBusy;
   motionPlaybackSavedButton.disabled = isBusy || !latestSavedRecordings.length;
   motionStopButton.disabled = !isBusy;
   motionNameInput.disabled = isBusy;
   motionDurationInput.disabled = isBusy;
   motionIdleInput.disabled = isBusy;
+  motionPlaybackSpeedInput.disabled = isBusy;
   savedRecordingsSelect.disabled = isBusy || !latestSavedRecordings.length;
+}
+
+function setSequenceControlsBusy(isBusy, stopEnabled = false) {
+  sequenceRunButton.disabled = isBusy;
+  sequenceExampleButton.disabled = isBusy;
+  sequenceScriptInput.disabled = isBusy;
+  sequenceSavedClipSelect.disabled = isBusy || !latestSavedRecordings.length;
+  sequenceInsertSavedButton.disabled = isBusy || !latestSavedRecordings.length;
+  sequenceStopButton.disabled = !stopEnabled;
+  sequenceManagedButtons.forEach((button) => {
+    button.disabled = isBusy;
+  });
+}
+
+function refreshBusyState() {
+  const uiBusy = motionBusy || sequenceBusy;
+  setMotionControlsBusy(uiBusy);
+  setSequenceControlsBusy(uiBusy, sequenceBusy);
+}
+
+function applyPositions(positions = {}) {
+  latestPositions = Object.fromEntries(
+    Object.entries(positions || {}).map(([servoId, position]) => [Number(servoId), position])
+  );
+  renderServoTable();
+}
+
+function updateSequenceStatus(message) {
+  sequenceStatus.textContent = message;
 }
 
 function stopMotionCountdown() {
@@ -369,6 +430,9 @@ async function loadConfig() {
   try {
     latestConfig = await fetchJson("/api/config");
     busDevice.textContent = `${latestConfig.servo_bus.device} @ ${latestConfig.servo_bus.baud_rate}`;
+    if (!motionPlaybackSpeedInput.value && latestConfig?.motion?.default_speed) {
+      motionPlaybackSpeedInput.value = `${latestConfig.motion.default_speed}`;
+    }
     renderWalkingProfile(latestConfig);
     renderServoTable();
   } catch (error) {
@@ -391,6 +455,10 @@ function recordingName() {
   return value || "last_capture";
 }
 
+function sequenceScriptStorageKey() {
+  return `${window.location.pathname}:sequence-script`;
+}
+
 function recordDurationMs() {
   const seconds = Number(motionDurationInput.value || 10);
   const safeSeconds = Number.isFinite(seconds) ? seconds : 10;
@@ -405,6 +473,155 @@ function idleStopSeconds() {
   return Math.max(0.5, Math.min(600, seconds));
 }
 
+function playbackSpeed() {
+  const value = motionPlaybackSpeedInput.value.trim();
+  if (!value) {
+    return null;
+  }
+
+  const speed = Number(value);
+  if (!Number.isFinite(speed) || speed <= 0) {
+    return null;
+  }
+
+  return Math.max(1, Math.min(4095, Math.round(speed)));
+}
+
+function normalizeSequenceLine(line, lineNumber) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) {
+    return null;
+  }
+
+  const lower = trimmed.toLowerCase();
+  if (["stand", "sit", "storage", "relax", "scan", "read-positions"].includes(lower)) {
+    return {
+      type: "action",
+      command: lower,
+      label: trimmed,
+      lineNumber,
+    };
+  }
+
+  if (lower === "play-last") {
+    return {
+      type: "playback",
+      name: null,
+      label: "play-last",
+      lineNumber,
+    };
+  }
+
+  if (lower.startsWith("play-saved ")) {
+    const name = trimmed.slice("play-saved ".length).trim();
+    if (!name) {
+      throw new Error(`Line ${lineNumber}: play-saved needs a clip name.`);
+    }
+    return {
+      type: "playback",
+      name,
+      label: `play-saved ${name}`,
+      lineNumber,
+    };
+  }
+
+  if (lower.startsWith("save-current ")) {
+    const name = trimmed.slice("save-current ".length).trim();
+    if (!name) {
+      throw new Error(`Line ${lineNumber}: save-current needs a clip name.`);
+    }
+    return {
+      type: "save-current",
+      name,
+      label: `save-current ${name}`,
+      lineNumber,
+    };
+  }
+
+  if (lower.startsWith("wait ")) {
+    const secondsText = trimmed.slice("wait ".length).trim();
+    const seconds = Number(secondsText);
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      throw new Error(`Line ${lineNumber}: wait needs a non-negative number of seconds.`);
+    }
+    return {
+      type: "wait",
+      seconds,
+      label: `wait ${seconds}s`,
+      lineNumber,
+    };
+  }
+
+  throw new Error(`Line ${lineNumber}: unsupported command "${trimmed}".`);
+}
+
+function parseSequenceScript(source) {
+  const steps = [];
+  source.split(/\r?\n/).forEach((line, index) => {
+    const step = normalizeSequenceLine(line, index + 1);
+    if (step) {
+      steps.push(step);
+    }
+  });
+  return steps;
+}
+
+function saveSequenceDraft() {
+  window.localStorage.setItem(sequenceScriptStorageKey(), sequenceScriptInput.value);
+}
+
+function loadSequenceDraft() {
+  const stored = window.localStorage.getItem(sequenceScriptStorageKey());
+  if (stored) {
+    sequenceScriptInput.value = stored;
+  }
+}
+
+function loadSequenceExample() {
+  sequenceScriptInput.value = [
+    "stand",
+    "wait 1.0",
+    "play-saved Wave",
+    "wait 0.5",
+    "sit",
+    "relax",
+  ].join("\n");
+  saveSequenceDraft();
+  updateSequenceStatus("Example sequence loaded.");
+}
+
+function appendSequenceLine(line) {
+  const existing = sequenceScriptInput.value.trimEnd();
+  sequenceScriptInput.value = existing ? `${existing}\n${line}` : line;
+  saveSequenceDraft();
+}
+
+function insertSavedClipStep() {
+  const name = sequenceSavedClipSelect.value;
+  if (!name) {
+    updateSequenceStatus("Pick a saved clip first.");
+    return;
+  }
+
+  appendSequenceLine(`play-saved ${name}`);
+  updateSequenceStatus(`Added saved clip step for ${name}.`);
+}
+
+async function waitForSequence(seconds) {
+  const durationMs = Math.max(0, Math.round(seconds * 1000));
+  const startedAt = Date.now();
+
+  while ((Date.now() - startedAt) < durationMs) {
+    if (sequenceStopRequested) {
+      return;
+    }
+
+    const remainingMs = Math.max(0, durationMs - (Date.now() - startedAt));
+    updateSequenceStatus(`Waiting ${(remainingMs / 1000).toFixed(1)}s before the next step.`);
+    await new Promise((resolve) => window.setTimeout(resolve, Math.min(100, remainingMs || 100)));
+  }
+}
+
 async function refreshHealth() {
   try {
     const status = await fetchJson("/api/health");
@@ -414,7 +631,7 @@ async function refreshHealth() {
   }
 }
 
-async function scanServos() {
+async function scanServos(throwOnError = false) {
   try {
     const payload = await fetchJson("/api/servos/scan");
     latestScan = new Map((payload.found || []).map((entry) => [entry.servo_id, entry]));
@@ -423,29 +640,35 @@ async function scanServos() {
     await refreshHealth();
   } catch (error) {
     log(`Servo scan failed: ${error.message}`);
+    if (throwOnError) {
+      throw error;
+    }
   }
 }
 
-async function readPositions() {
+async function readPositions(throwOnError = false) {
   try {
     const payload = await fetchJson("/api/servos/positions");
-    latestPositions = Object.fromEntries(
-      Object.entries(payload.positions || {}).map(([servoId, position]) => [Number(servoId), position])
-    );
-    renderServoTable();
+    applyPositions(payload.positions || {});
     log(`Read ${Object.keys(latestPositions).length} servo position(s).`);
   } catch (error) {
     log(`Position read failed: ${error.message}`);
+    if (throwOnError) {
+      throw error;
+    }
   }
 }
 
-async function sendAction(url, label) {
+async function sendAction(url, label, throwOnError = false) {
   try {
     const status = await fetchJson(url, { method: "POST", body: "{}" });
     renderStatus(status);
     log(`${label} ok.`);
   } catch (error) {
     log(`${label} failed: ${error.message}`);
+    if (throwOnError) {
+      throw error;
+    }
   }
 }
 
@@ -453,7 +676,7 @@ async function recordMotion() {
   const durationMs = recordDurationMs();
   const idleSeconds = idleStopSeconds();
   motionBusy = true;
-  setMotionControlsBusy(true);
+  refreshBusyState();
   motionRecordButton.textContent = "Recording...";
   startRecordingCountdown(durationMs, idleSeconds || 0);
   log(`Motion recording started for ${(durationMs / 1000).toFixed(1)} seconds.`);
@@ -478,7 +701,7 @@ async function recordMotion() {
   } finally {
     stopMotionCountdown();
     motionBusy = false;
-    setMotionControlsBusy(false);
+    refreshBusyState();
     motionRecordButton.textContent = "Record";
   }
 }
@@ -514,9 +737,29 @@ async function saveMotionRecording() {
   }
 }
 
-async function playbackMotion(name = null) {
+async function saveCurrentPosition(name = recordingName(), throwOnError = false) {
+  try {
+    const payload = await fetchJson("/api/motion/current/save", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    applyPositions(payload.saved?.frames?.[0]?.positions || {});
+    renderRecording(payload.recording);
+    renderSavedRecordings(payload.saved_recordings || []);
+    renderStatus(payload.status);
+    log(`Saved current position as ${payload.saved.name}.`);
+  } catch (error) {
+    log(`Save current position failed: ${error.message}`);
+    if (throwOnError) {
+      throw error;
+    }
+  }
+}
+
+async function playbackMotion(name = null, throwOnError = false) {
+  const speed = playbackSpeed();
   motionBusy = true;
-  setMotionControlsBusy(true);
+  refreshBusyState();
   motionPlaybackButton.textContent = name ? "Play Last" : "Playing...";
   motionPlaybackSavedButton.textContent = name ? "Playing..." : "Play Saved";
   recordingSummary.textContent = name
@@ -526,27 +769,134 @@ async function playbackMotion(name = null) {
   try {
     const payload = await fetchJson("/api/motion/playback", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, speed }),
     });
     renderRecording(payload.recording);
     renderSavedRecordings(payload.saved_recordings || []);
     renderStatus(payload.status);
-    log(`Motion playback ok: ${payload.clip.name} replayed.`);
+    log(`Motion playback ok: ${payload.clip.name} replayed${speed ? ` at speed ${speed}` : ""}.`);
   } catch (error) {
     recordingSummary.textContent = "Motion playback failed. Check the event log and try again.";
     log(`Motion playback failed: ${error.message}`);
+    if (throwOnError) {
+      throw error;
+    }
   } finally {
     motionBusy = false;
-    setMotionControlsBusy(false);
+    refreshBusyState();
     motionPlaybackButton.textContent = "Play Last";
     motionPlaybackSavedButton.textContent = "Play Saved";
   }
 }
 
+async function executeSequenceStep(step) {
+  if (step.type === "wait") {
+    await waitForSequence(step.seconds);
+    return;
+  }
+
+  if (step.type === "action") {
+    if (step.command === "stand") {
+      await sendAction("/api/pose/stand", "Stand", true);
+      return;
+    }
+    if (step.command === "sit") {
+      await sendAction("/api/pose/sit", "Sit", true);
+      return;
+    }
+    if (step.command === "storage") {
+      await sendAction("/api/pose/storage", "Storage", true);
+      return;
+    }
+    if (step.command === "relax") {
+      await sendAction("/api/pose/relax", "Relax", true);
+      return;
+    }
+    if (step.command === "scan") {
+      await scanServos(true);
+      return;
+    }
+    if (step.command === "read-positions") {
+      await readPositions(true);
+      return;
+    }
+  }
+
+  if (step.type === "playback") {
+    await playbackMotion(step.name, true);
+    return;
+  }
+
+  if (step.type === "save-current") {
+    await saveCurrentPosition(step.name, true);
+    return;
+  }
+
+  throw new Error(`Unsupported sequence step type: ${step.type}`);
+}
+
+async function runSequence() {
+  let steps;
+  try {
+    steps = parseSequenceScript(sequenceScriptInput.value);
+  } catch (error) {
+    updateSequenceStatus(error.message);
+    log(`Sequence parse failed: ${error.message}`);
+    return;
+  }
+
+  if (!steps.length) {
+    updateSequenceStatus("Enter at least one sequence line to run.");
+    return;
+  }
+
+  sequenceBusy = true;
+  sequenceStopRequested = false;
+  refreshBusyState();
+  log(`Sequence started with ${steps.length} step(s).`);
+
+  try {
+    for (let index = 0; index < steps.length; index += 1) {
+      if (sequenceStopRequested) {
+        break;
+      }
+
+      const step = steps[index];
+      updateSequenceStatus(`Running step ${index + 1}/${steps.length}: ${step.label}`);
+      log(`Sequence ${index + 1}/${steps.length}: ${step.label}`);
+      await executeSequenceStep(step);
+    }
+
+    if (sequenceStopRequested) {
+      updateSequenceStatus("Sequence stop requested. No new steps will start.");
+      log("Sequence stop requested.");
+    } else {
+      updateSequenceStatus(`Sequence complete. Ran ${steps.length} step(s).`);
+      log("Sequence complete.");
+    }
+  } catch (error) {
+    updateSequenceStatus(`Sequence failed: ${error.message}`);
+    log(`Sequence failed: ${error.message}`);
+  } finally {
+    sequenceBusy = false;
+    sequenceStopRequested = false;
+    refreshBusyState();
+  }
+}
+
+function requestSequenceStop() {
+  if (!sequenceBusy) {
+    updateSequenceStatus("No sequence is running.");
+    return;
+  }
+  sequenceStopRequested = true;
+  updateSequenceStatus("Sequence stop requested. Waiting for the current step to finish.");
+}
+
 async function sendTeleop(command) {
   updateAxisReadout(command.axes);
 
-  if (motionBusy) {
+  if (motionBusy || sequenceBusy) {
     return;
   }
 
@@ -633,12 +983,17 @@ function bindButtons() {
   motionStopButton.addEventListener("click", stopMotionRecording);
   motionPlaybackButton.addEventListener("click", () => playbackMotion());
   motionSaveButton.addEventListener("click", saveMotionRecording);
+  motionSaveCurrentButton.addEventListener("click", saveCurrentPosition);
   motionPlaybackSavedButton.addEventListener("click", () => {
     if (!savedRecordingsSelect.value) {
       return;
     }
     playbackMotion(savedRecordingsSelect.value);
   });
+  sequenceRunButton.addEventListener("click", runSequence);
+  sequenceStopButton.addEventListener("click", requestSequenceStop);
+  sequenceExampleButton.addEventListener("click", loadSequenceExample);
+  sequenceInsertSavedButton.addEventListener("click", insertSavedClipStep);
   document.getElementById("center-axes").addEventListener("click", resetTouchAxes);
 
   document.querySelectorAll(".preset").forEach((button) => {
@@ -672,17 +1027,21 @@ function bindInputs() {
     pressed.delete(event.code);
     updateKeyboardAxes();
   });
+
+  sequenceScriptInput.addEventListener("input", saveSequenceDraft);
 }
 
 async function bootstrap() {
   setConnection(false);
   syncTouchInputs();
   updateAxisReadout({ forward: 0, strafe: 0, turn: 0 });
+  loadSequenceDraft();
   bindButtons();
   bindInputs();
   await loadConfig();
   await loadRecording();
-  setMotionControlsBusy(false);
+  refreshBusyState();
+  updateSequenceStatus("No sequence running.");
   await refreshHealth();
   await readPositions();
   connectSocket();

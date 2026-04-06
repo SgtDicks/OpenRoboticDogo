@@ -61,6 +61,7 @@ doggo --config config\doggo.local.yaml relax
 doggo --config config\doggo.local.yaml scan
 doggo --config config\doggo.local.yaml read-all
 doggo --config config\doggo.local.yaml read-pos --id 1
+doggo --config config\doggo.local.yaml save-current --name StandSnapshot
 doggo --config config\doggo.local.yaml move --id 1 --position 2048
 doggo --config config\doggo.local.yaml assign-id --current-id 1 --new-id 4
 ```
@@ -86,6 +87,7 @@ doggo --config config\doggo.local.yaml sss --leg front_right
 - Refresh health
 - Scan bus
 - Read positions
+- Save Current As
 
 ### Body poses
 
@@ -93,6 +95,14 @@ doggo --config config\doggo.local.yaml sss --leg front_right
 - Sit
 - Storage
 - Relax
+
+### Sequencer
+
+- One command per line
+- Supports `stand`, `sit`, `storage`, `relax`, `scan`, `read-positions`
+- Supports `play-last`, `play-saved NAME`, `save-current NAME`, and `wait SECONDS`
+- Can insert the currently selected saved clip into the script with `Add Saved Clip Step`
+- Uses the current playback speed field for playback steps
 
 ### Touch trim and teleop
 
@@ -126,5 +136,6 @@ Shows:
 1. Stop sending new movement commands.
 2. Hit `Relax`.
 3. Read current positions.
-4. Compare the live posture to the saved pose values in `config\doggo.local.yaml`.
-5. Re-capture or retune the pose before trying again.
+4. Use `Save Current As` if you want to keep the live readback as a one-frame clip.
+5. Compare the live posture to the saved pose values in `config\doggo.local.yaml`.
+6. Re-capture or retune the pose before trying again.

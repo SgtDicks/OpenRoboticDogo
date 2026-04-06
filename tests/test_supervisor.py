@@ -860,6 +860,34 @@ def test_save_recording_persists_named_clip_and_lists_it(tmp_path: Path) -> None
     assert supervisor.list_saved_recordings()[0]["name"] == "wave_test"
 
 
+def test_save_current_recording_reads_live_positions_and_persists_named_clip(tmp_path: Path) -> None:
+    config = load_config(Path("config/doggo.example.yaml"))
+
+    class FakeBus:
+        def read_present_position(self, servo_id: int) -> int:
+            return 2000 + servo_id
+
+    supervisor = ControlSupervisor(
+        config,
+        servo_bus=FakeBus(),  # type: ignore[arg-type]
+        runtime_state_path=tmp_path / "doggo.state.json",
+    )
+
+    saved = asyncio.run(supervisor.save_current_recording("stand_snapshot"))
+
+    assert saved.name == "stand_snapshot"
+    assert saved.duration_ms == 0
+    assert saved.frame_count == 1
+    assert saved.frames[0].timestamp_ms == 0
+    assert saved.frames[0].positions[1] == 2001
+    assert saved.frames[0].positions[12] == 2012
+    assert saved.servo_ids == list(range(1, 13))
+    assert supervisor.recording_snapshot()["available"] is True
+    assert (tmp_path / "recordings" / "stand_snapshot.json").exists()
+    assert supervisor.recording_path.exists()
+    assert supervisor.last_message == "Saved current positions as stand_snapshot from 12 reachable servo(s)."
+
+
 def test_playback_recording_can_load_saved_clip_by_name(tmp_path: Path) -> None:
     config = load_config(Path("config/doggo.example.yaml"))
 

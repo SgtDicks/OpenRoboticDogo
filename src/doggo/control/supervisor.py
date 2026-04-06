@@ -156,6 +156,26 @@ class ControlSupervisor:
             raise ServoBusError(f"Could not save recording {name!r}: {exc}") from exc
         return saved_recording
 
+    def _recording_from_positions(
+        self,
+        *,
+        name: str,
+        positions: dict[int, int],
+    ) -> MotionRecording:
+        if not positions:
+            raise ServoBusError("Could not read any servos to capture the current position.")
+        ordered_positions = dict(sorted(positions.items()))
+        return MotionRecording(
+            name=name,
+            duration_ms=0,
+            sample_ms=100,
+            stop_reason="manual",
+            idle_stop_seconds=None,
+            idle_threshold_ticks=self._DEFAULT_IDLE_THRESHOLD_TICKS,
+            servo_ids=list(ordered_positions),
+            frames=[MotionFrame(timestamp_ms=0, positions=ordered_positions)],
+        )
+
     def recording_snapshot(self) -> dict[str, Any]:
         if self.last_recording is None:
             return {
@@ -577,6 +597,26 @@ class ControlSupervisor:
             positions = await self._capture_current_positions()
         self.last_message = f"Read positions for {len(positions)} reachable configured servos."
         return positions
+
+    async def save_current_recording(self, name: str) -> MotionRecording:
+        if not self.servo_bus:
+            raise ServoBusError("Servo bus is not configured.")
+        if self._recording_active:
+            raise ServoBusError("Cannot save current positions while a motion recording is in progress.")
+
+        async with self._motion_lock:
+            positions = await self._capture_current_positions()
+
+        self.last_recording = self._recording_from_positions(name=name, positions=positions)
+        self._write_last_recording()
+        saved = self.save_last_recording_as(name)
+        self.state = "recorded"
+        self.last_message = (
+            f"Saved current positions as {saved.name} "
+            f"from {len(saved.frames[0].positions)} reachable servo(s)."
+        )
+        self._record_pose_command("recorded")
+        return saved
 
     async def record_motion(
         self,

@@ -204,9 +204,15 @@ h3 {
   line-height: 1.45;
 }
 
+.sequence-help {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .recording-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -230,7 +236,8 @@ h3 {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: 14px;
@@ -238,6 +245,13 @@ h3 {
   font: inherit;
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
+}
+
+.field textarea {
+  min-height: 148px;
+  resize: vertical;
+  font-family: "Consolas", "Cascadia Code", monospace;
+  line-height: 1.45;
 }
 
 .field.actions {

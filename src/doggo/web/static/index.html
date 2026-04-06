@@ -80,12 +80,17 @@
                   <span>Idle Auto-Stop (sec)</span>
                   <input id="motion-idle-seconds" type="number" min="0" max="600" step="0.5" value="0" />
                 </label>
+                <label class="field">
+                  <span>Playback Speed</span>
+                  <input id="motion-playback-speed" type="number" min="1" max="4095" step="1" placeholder="Auto / recorded" />
+                </label>
               </div>
               <div class="button-grid">
                 <button id="motion-record" type="button" class="button">Record</button>
                 <button id="motion-stop" type="button" class="button ghost">Stop</button>
                 <button id="motion-playback" type="button" class="button ghost">Play Last</button>
                 <button id="motion-save" type="button" class="button ghost">Save Last As</button>
+                <button id="motion-save-current" type="button" class="button ghost">Save Current As</button>
               </div>
               <div class="recording-grid secondary">
                 <label class="field">
@@ -98,6 +103,40 @@
                 </div>
               </div>
               <p id="recording-summary" class="recording-summary">No recording saved yet.</p>
+            </div>
+
+            <div class="action-block">
+              <h3>Sequencer</h3>
+              <label class="field">
+                <span>Sequence Script</span>
+                <textarea
+                  id="sequence-script"
+                  rows="8"
+                  placeholder="stand&#10;wait 1.0&#10;play-saved Wave&#10;wait 0.5&#10;sit&#10;relax"
+                ></textarea>
+              </label>
+              <div class="button-grid">
+                <button id="sequence-run" type="button" class="button">Run Sequence</button>
+                <button id="sequence-stop" type="button" class="button ghost">Stop Sequence</button>
+                <button id="sequence-example" type="button" class="button ghost">Load Example</button>
+              </div>
+              <div class="recording-grid secondary">
+                <label class="field">
+                  <span>Saved Clip Step</span>
+                  <select id="sequence-saved-clip"></select>
+                </label>
+                <div class="field actions">
+                  <span>Sequence Clip Action</span>
+                  <button id="sequence-insert-saved" type="button" class="button ghost">Add Saved Clip Step</button>
+                </div>
+              </div>
+              <p class="sequence-help">
+                Supported lines: <code>stand</code>, <code>sit</code>, <code>storage</code>,
+                <code>relax</code>, <code>scan</code>, <code>read-positions</code>,
+                <code>play-last</code>, <code>play-saved NAME</code>, <code>save-current NAME</code>,
+                and <code>wait SECONDS</code>. Playback lines use the current playback speed field.
+              </p>
+              <p id="sequence-status" class="recording-summary">No sequence running.</p>
             </div>
           </div>
 
