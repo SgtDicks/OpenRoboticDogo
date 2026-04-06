@@ -6,6 +6,8 @@ OpenRoboticDogo is our Doggo build: a low-cost open quadruped robot with printab
 
 ![Doggo Build Photo](Pics%20and%20videos/PXL_20260322_135309000.RAW-01.jpg)
 
+[Walking Demo Video](Pics%20and%20videos/Walking%20Demo.mp4)
+
 ## Massive Credit to the Original Repo
 
 This project owes a huge amount to the original open-source work at [garciamathias/OpenRoboticDog](https://github.com/garciamathias/OpenRoboticDog).
@@ -19,7 +21,7 @@ The original repo set the mechanical direction, the spirit of the project, and t
 - Browser control is live for desktop and Steam Deck use.
 - ESP32 joystick support is scaffolded as a low-latency manual input path.
 - Servo discovery, calibration, stand, sit, storage, relax, motion recording, playback, and live web bring-up are working.
-- A first walking pass exists, but it is still being tuned and is not moving correctly yet.
+- Doggo now has an early walking demo, but the scripted gait still needs tuning for stability, transitions, and repeatability.
 
 ## Documentation
 
@@ -55,6 +57,7 @@ This repo now contains both the printable robot files and the active control sof
 The build media folder is now part of the repo:
 
 - `Pics and videos/PXL_20260322_135309000.RAW-01.jpg`
+- `Pics and videos/Walking Demo.mp4`
 
 Future videos and progress photos should also go in `Pics and videos/` so the README and project history stay together.
 
@@ -154,7 +157,11 @@ doggo --config config\doggo.local.yaml serve
 
 ## Near-Term Roadmap
 
-1. Finish tuning the first walking pass until the gait moves correctly.
+1. Improve the scripted gait with better signs, stride tuning, transitions, and recovery behavior so the walking demo becomes repeatable.
 2. Add safer live gait tuning controls in the browser.
-3. Add measured geometry and IK.
-4. Add camera-assisted person following.
+3. Add MPU6050 IMU feedback for real-time reactions to movement, tilt, and disturbances.
+4. Build a MuJoCo simulation using MJCF so gait and control changes can be tested before running them on hardware.
+5. Explore Proximal Policy Optimization (PPO) in simulation for learned locomotion and balancing behaviors.
+6. Add measured geometry and IK.
+7. Transition the simulation and training stack toward Isaac Lab for larger-scale experiments and sim-to-real workflows.
+8. Add camera-assisted person following.
