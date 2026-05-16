@@ -1,0 +1,42 @@
+{
+  "name": "Right Leg Mid Point 1",
+  "captured_at": "2026-04-06T05:44:15.420466+00:00",
+  "duration_ms": 0,
+  "sample_ms": 100,
+  "stop_reason": "manual",
+  "idle_stop_seconds": null,
+  "idle_threshold_ticks": 15,
+  "servo_ids": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "frames": [
+    {
+      "timestamp_ms": 0,
+      "positions": {
+        "1": 2043,
+        "2": 1496,
+        "3": 3071,
+        "4": 1933,
+        "5": 2253,
+        "6": 1661,
+        "7": 1929,
+        "8": 3196,
+        "9": 356,
+        "10": 2115,
+        "11": 2021,
+        "12": 2288
+      }
+    }
+  ]
+}

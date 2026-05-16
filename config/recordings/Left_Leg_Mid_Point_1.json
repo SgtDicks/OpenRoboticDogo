@@ -1,0 +1,42 @@
+{
+  "name": "Left Leg Mid Point 1",
+  "captured_at": "2026-04-06T05:40:48.716134+00:00",
+  "duration_ms": 0,
+  "sample_ms": 100,
+  "stop_reason": "manual",
+  "idle_stop_seconds": null,
+  "idle_threshold_ticks": 15,
+  "servo_ids": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "frames": [
+    {
+      "timestamp_ms": 0,
+      "positions": {
+        "1": 2049,
+        "2": 1482,
+        "3": 2765,
+        "4": 1860,
+        "5": 2678,
+        "6": 1232,
+        "7": 2011,
+        "8": 2402,
+        "9": 845,
+        "10": 2115,
+        "11": 1743,
+        "12": 2745
+      }
+    }
+  ]
+}

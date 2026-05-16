@@ -1,0 +1,44 @@
+<mujoco model="doggo_assembly_frame_preview">
+  <compiler angle="radian" meshdir="assets"/>
+
+  <visual>
+    <headlight ambient="0.6 0.6 0.6" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2"/>
+  </visual>
+
+  <asset>
+    <material name="mat_body" rgba="0.72 0.72 0.78 1"/>
+    <material name="mat_leg" rgba="0.25 0.42 0.88 1"/>
+    <material name="mat_joint" rgba="0.95 0.57 0.15 1"/>
+    <material name="mat_servo" rgba="0.24 0.24 0.24 1"/>
+    <material name="mat_mount" rgba="0.15 0.60 0.35 1"/>
+
+    <!-- The current Fusion exports are in a shared assembly frame, in millimeters. -->
+    <mesh name="back_mesh" file="Back_mjc.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="ball_leg_1_mesh" file="Ball Leg 1.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="body_mesh" file="Body_mjc.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="camera_45_mount_mesh" file="Camera 45 Mount.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="camera_front_mount_mesh" file="Camera Front Mount.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="leg_joint_1_mesh" file="Leg Joint 1.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="leg_joint_2_mesh" file="Leg Joint 2.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="right_leg_mesh" file="Right Leg_mjc.obj" scale="0.001 0.001 0.001"/>
+    <mesh name="st3215_v1_mesh" file="ST3215 v1_mjc.obj" scale="0.001 0.001 0.001"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 4" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="5 5 0.1" rgba="0.9 0.9 0.9 1"/>
+
+    <!-- This preview keeps the current mesh coordinates untouched. -->
+    <body name="export_frame_preview" pos="0 0 0.02">
+      <geom type="mesh" mesh="body_mesh" material="mat_body"/>
+      <geom type="mesh" mesh="back_mesh" material="mat_body"/>
+      <geom type="mesh" mesh="leg_joint_1_mesh" material="mat_joint"/>
+      <geom type="mesh" mesh="leg_joint_2_mesh" material="mat_joint"/>
+      <geom type="mesh" mesh="right_leg_mesh" material="mat_leg"/>
+      <geom type="mesh" mesh="ball_leg_1_mesh" material="mat_leg"/>
+      <geom type="mesh" mesh="st3215_v1_mesh" material="mat_servo"/>
+      <geom type="mesh" mesh="camera_45_mount_mesh" material="mat_mount"/>
+      <geom type="mesh" mesh="camera_front_mount_mesh" material="mat_mount"/>
+    </body>
+  </worldbody>
+</mujoco>

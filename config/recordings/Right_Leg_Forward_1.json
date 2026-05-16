@@ -1,0 +1,42 @@
+{
+  "name": "Right Leg Forward 1",
+  "captured_at": "2026-04-06T05:36:17.422969+00:00",
+  "duration_ms": 0,
+  "sample_ms": 100,
+  "stop_reason": "manual",
+  "idle_stop_seconds": null,
+  "idle_threshold_ticks": 15,
+  "servo_ids": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "frames": [
+    {
+      "timestamp_ms": 0,
+      "positions": {
+        "1": 2048,
+        "2": 1480,
+        "3": 2753,
+        "4": 1928,
+        "5": 2680,
+        "6": 1561,
+        "7": 2016,
+        "8": 2403,
+        "9": 840,
+        "10": 2113,
+        "11": 1683,
+        "12": 2278
+      }
+    }
+  ]
+}
